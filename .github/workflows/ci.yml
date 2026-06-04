@@ -1,0 +1,69 @@
+name: CI Checks
+
+on:
+  pull_request:
+    branches:
+      - main        # or master, or whichever branches you want to protect
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install linting tools
+        run: pip install flake8
+
+      - name: Run PEP8 lint check
+        run: flake8 . --max-line-length=79 --statistics
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          pip install ".[test]"
+
+      - name: Run tests with coverage
+        run: |
+          set -o pipefail
+          pytest --junitxml=pytest.xml --cov-report=term-missing --cov=numcompute tests/ | tee pytest-coverage.txt
+
+      - name: Pytest coverage comment
+        id: coverage
+        uses: MishaKav/pytest-coverage-comment@v1
+        with:
+          pytest-coverage-path: ./pytest-coverage.txt
+          junitxml-path: ./pytest.xml
+
+      - name: Update README
+        run: |
+          COVERAGE_HTML="${{ steps.coverage.outputs.coverageHtml }}"
+          sed -i '/<!-- Pytest Coverage Comment:Begin -->/,/<!-- Pytest Coverage Comment:End -->/c\<!-- Pytest Coverage Comment:Begin -->\n'"${COVERAGE_HTML}"'\n<!-- Pytest Coverage Comment:End -->' README.md
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'Docs: update coverage badge'
+          file_pattern: README.md

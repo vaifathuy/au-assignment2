@@ -1,0 +1,284 @@
+from numcompute.stats import Statistics, histogram, quantile
+import pytest
+import numpy as np
+
+
+class TestStatistics:
+
+    def test_standard_dev(self):
+        stat = Statistics()
+        stat.add(1)
+        stat.add(21)
+        stat.add(13)
+        stat.add(11)
+        stat.add(2)
+        stat.add(7)
+        assert np.isclose(np.array([stat.std_dev()]),
+                          np.array([1.0614455552060436]))
+
+    def test_mean(self):
+        stat = Statistics()
+        stat.add(1)
+        stat.add(21)
+        stat.add(13)
+        stat.add(11)
+        stat.add(2)
+        stat.add(7)
+        assert np.isclose(np.array([stat.mean]), np.array(9.166666666666666))
+
+    def test_min(self):
+        stat = Statistics()
+        stat.add(2)
+        stat.add(7)
+        stat.add(7)
+        stat.add(45)
+        stat.add(6)
+        stat.add(21)
+        assert stat.min == 2
+
+    def test_max(self):
+        stat = Statistics()
+        stat.add(5)
+        stat.add(8)
+        stat.add(3)
+        stat.add(5)
+        stat.add(2)
+        stat.add(6)
+        assert stat.max == 8
+
+    def test_median(self):
+        stat = Statistics()
+        median = stat.median(np.array([23, 45, 1, 2, 67, 87]))
+        assert median == 34.0
+
+    def test_median_none_nan_inf(self):
+        stat = Statistics()
+        with pytest.raises(ValueError):
+            stat.median(np.array([23, 45, 1, 2, 67, None, np.nan, np.inf]))
+
+    def test_median_2d(self):
+        stat = Statistics()
+        median = stat.median(np.array([[23, 45, 1], [2, 67, 87]]))
+        assert median == 34.0
+
+    def test_median_axis_0(self):
+        stat = Statistics()
+        median = stat.median(np.array([[23, 45, 1], [2, 67, 87]]), axis=0)
+        assert np.equal(median, np.array([12.5, 56.0, 44.0])).all()
+
+    def test_median_axis_1(self):
+        stat = Statistics()
+        median = stat.median(np.array([[23, 45, 1], [2, 67, 87]]), axis=1)
+        assert np.equal(median, np.array([23.0, 67.0])).all()
+
+    def test_median_keepdims(self):
+        stat = Statistics()
+        median = stat.median(np.array([[23, 45, 1], [2, 67, 87]]),
+                             axis=1, keepdims=True)
+        assert median.ndim == 2
+
+    def test_standard_dev_nan(self):
+        stat = Statistics()
+        with pytest.raises(ValueError):
+            stat.add(None)
+            stat.add(3)
+            stat.add(5)
+            stat.add(2)
+            stat.add(6)
+            stat.add("12")
+
+
+class TestHistogram:
+
+    def test_histogram(self):
+        hist, edges = histogram(np.array([1, 2, 1, 3, 4, 5, 1]))
+        assert np.array_equal(hist, np.array([3, 0, 1, 0, 0, 1, 0, 1, 0, 1]))
+        assert np.allclose(edges, np.array([1.0, 1.4, 1.8, 2.2, 2.6,
+                                            3.0, 3.4, 3.8, 4.2, 4.6, 5.0]))
+
+    def test_histogram_a_none(self):
+        with pytest.raises(ValueError):
+            histogram(np.array([1, 2, 5, 7, np.nan, np.inf, 9, 23]))
+
+    def test_histogram_a_2d_none(self):
+        with pytest.raises(ValueError):
+            histogram(np.array([[1, 2, 5, 7], [np.nan, np.inf, 9, 23]]))
+
+    def test_histogram_bins_value(self):
+        hist, edges = histogram(np.array([10, 15, 10, 50, 55]), bins=12)
+        assert np.array_equal(hist,
+                              np.array([2, 1, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 1, 1]))
+        assert np.allclose(edges,
+                           np.array([10.0, 13.75, 17.5, 21.25, 25.0,
+                                     28.75, 32.5, 36.25, 40.0, 43.75, 47.5,
+                                     51.25, 55.0]))
+
+    def test_histogram_bins_array(self):
+        hist, edges = histogram(np.array([1, 1, 2, 5, 8, 10,
+                                          12, 15,
+                                          18, 20]), bins=[0, 5, 15, 20])
+        assert np.array_equal(hist, np.array([3, 4, 3]))
+        assert np.array_equal(edges, np.array([0, 5, 15, 20]))
+
+    def test_histogram_range(self):
+        hist, edges = histogram(np.array([85, 82, 88, 90, 78, 92, 999]),
+                                range=(0, 100))
+        assert np.array_equal(hist, np.array([0, 0, 0, 0, 0, 0, 0, 1, 3, 2]))
+        assert np.allclose(edges, np.array([0.0, 10.0, 20.0, 30.0, 40.0, 50.0,
+                                            60.0, 70.0, 80.0, 90.0, 100.0]))
+
+    def test_histogram_density_true(self):
+        hist, edges = histogram(np.array([10, 15, 10, 50, 55]), density=True,
+                                bins=2)
+        assert np.allclose(hist, np.array([0.026666666666666665,
+                                           0.017777777777777778]))
+        assert np.allclose(edges, np.array([10.0, 32.5, 55.0]))
+
+    def test_histogram_density_false(self):
+        hist, edges = histogram(np.array([10, 15, 10, 50, 55]), density=False,
+                                bins=2)
+        assert np.array_equal(hist, np.array([3, 2]))
+        assert np.allclose(edges, np.array([10.0, 32.5, 55.0]))
+
+    def test_histogram_weights(self):
+        hist, edges = histogram(
+            np.array([50, 90, 50]),
+            bins=np.array([0, 60, 100]),
+            weights=np.array([10, 5, 2])
+        )
+        assert np.array_equal(hist, np.array([12, 5]))
+        assert np.allclose(edges, np.array([0, 60, 100]))
+
+
+class TestQuantile():
+
+    def test_quantile(self):
+        q = quantile(np.array([10, 20, 30, 40]), np.array([0.5]))
+        assert q == 25
+
+    def test_quantile_axis_0(self):
+        q = quantile(
+            np.array([[10, 20, 30, 40], [50, 60, 70, 80]]),
+            np.array([0.25]),
+            axis=0
+        )
+        assert np.allclose(q, np.array([20.0, 30.0, 40.0, 50.0]))
+
+    def test_quantile_axis_1(self):
+        q = quantile(
+            np.array([[10, 20, 30, 40], [50, 60, 70, 80]]),
+            np.array([0.25]),
+            axis=1
+        )
+        assert np.allclose(q, np.array([17.5, 57.5]))
+
+    def test_quantile_out(self):
+        q = quantile(
+            np.array([10, 20, 30, 40, 50]), np.array([0.25]), out=np.zeros(1)
+        )
+        assert q == 20
+
+    def test_quantile_overwrite_input_true(self):
+        orig = np.array([50, 10, 30, 20, 40])
+        dup = orig.copy()
+        quantile(
+            orig, np.array([0.5]),
+            overwrite_input=True)
+        assert not np.array_equal(orig, dup)
+
+    def test_quantile_overwrite_input_false(self):
+        orig = np.array([50, 10, 30, 20, 40])
+        dup = orig.copy()
+        quantile(
+            orig, np.array([0.5]),
+            overwrite_input=False)
+        assert np.array_equal(orig, dup)
+
+    def test_quantile_method_linear(self):
+        q = quantile(np.array([10, 20, 30, 40, 50]), 0.3, method="linear")
+        assert q == 22
+
+    def test_quantile_method_lower(self):
+        q = quantile(np.array([10, 20, 30, 40, 50]), 0.3, method="lower")
+        assert q == 20
+
+    def test_quantile_method_higher(self):
+        q = quantile(np.array([10, 20, 30, 40, 50]), 0.3, method="higher")
+        assert q == 30
+
+    def test_quantile_method_midpoint(self):
+        q = quantile(np.array([10, 20, 30, 40, 50]), 0.3, method="midpoint")
+        assert q == 25.0
+
+    def test_quantile_method_nearest(self):
+        q = quantile(np.array([10, 20, 30, 40, 50]), 0.3, method="nearest")
+        assert q == 20
+
+    def test_quantile_method_inverted_cdf(self):
+        q = quantile(np.array([10, 20, 30, 40, 50]), 0.3,
+                     method="inverted_cdf")
+        assert q == 20
+
+    def test_quantile_method_averaged_inverted_cdf(self):
+        q = quantile(
+            np.array([10, 20, 30, 40, 50]), 0.3,
+            method="averaged_inverted_cdf"
+        )
+        assert q == 20
+
+    def test_quantile_method_closest_observation(self):
+        q = quantile(
+            np.array([10, 20, 30, 40, 50]), 0.3,
+            method="closest_observation"
+        )
+        assert q == 20
+
+    def test_quantile_method_interpolated_inverted_cdf(self):
+        q = quantile(
+            np.array([10, 20, 30, 40, 50]), 0.3,
+            method="interpolated_inverted_cdf"
+        )
+        assert q == 15
+
+    def test_quantile_method_hazen(self):
+        q = quantile(
+            np.array([10, 20, 30, 40, 50]), 0.3,
+            method="hazen"
+        )
+        assert q == 20
+
+    def test_quantile_method_weibull(self):
+        q = quantile(
+            np.array([10, 20, 30, 40, 50]), 0.3,
+            method="weibull"
+        )
+        assert q == 18
+
+    def test_quantile_method_median_unbiased(self):
+        q = quantile(
+            np.array([10, 20, 30, 40, 50]), 0.3,
+            method="median_unbiased"
+        )
+        assert q == pytest.approx(19.333333333333332)
+
+    def test_quantile_method_normal_unbiased(self):
+        q = quantile(
+            np.array([10, 20, 30, 40, 50]), 0.3,
+            method="normal_unbiased"
+        )
+        assert q == pytest.approx(19.5)
+
+    def test_quantile_keepdims_true(self):
+        q = quantile(
+            np.array([[10, 20, 30], [40, 50, 60]]), 0.5, axis=1, keepdims=True
+        )
+        assert q.shape == (2, 1)
+
+    def test_quantile_weights(self):
+        q = quantile(
+            np.array([10, 20, 30, 40, 50]), 0.5,
+            weights=np.array([10, 1, 1, 1, 1]),
+            method="inverted_cdf"
+        )
+        assert q == 10
