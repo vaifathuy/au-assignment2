@@ -71,51 +71,189 @@ class SimpleImputer(_BasePreprocessor):
             self,
             fill_value: float = 0.0,
             replace_nan: bool = True,
-            replace_none: bool = True
+            replace_none: bool = True,
+            strategy: str = "constant"
     ):
         if not replace_nan and not replace_none:
             raise ValueError("Must have at least one of replace_nan or "
                              "replace_none set to True.")
+        
+        if strategy not in {"constant", "mean"}:
+            raise ValueError(
+                "strategy must be either 'constant' or 'mean'."
+            )
+    
         self.fill_value = fill_value
         self.replace_nan = replace_nan
         self.replace_none = replace_none
+        self.strategy = strategy
+
+        # attributes to fit
+        self._feature_sums = None
+        self._valid_counts = None
+        self._statistics = None
 
     def fit(self, X: np.ndarray, y=None) -> Self:
         """
-        No-op fit. SimpleImputer has no parameters to learn.
+        Reset the imputer and learn replacement statistics from the supplied
+        training dataset.
+
+        Any previously learned state is discarded before fitting. When
+        ``strategy='constant'``, no values need to be estimated and the method
+        only validates the input shape. When ``strategy='mean'``, the method
+        learns the per-feature mean from valid observations while ignoring
+        missing values.
 
         Parameters
         ----------
         X : np.ndarray
-            Ignored. Present for API compliance.
+            Training data of shape (m, n), where m is the number of rows and
+            n is the number of features.
         y : np.ndarray, optional
-            Ignored. Present for API compliance.
+            Ignored. Present for API compatibility.
 
         Returns
         -------
         SimpleImputer
-            The unchanged instance.
+            The fitted imputer instance.
+
+        Raises
+        ------
+        ValueError
+            If ``X`` is not 2D.
+            If ``X`` contains no rows.
+        TypeError
+            If ``strategy='mean'`` and non-missing values cannot be converted
+            to numeric values.
 
         Complexity
         ----------
         Time Complexity:
-            O(1).
+            O(m * n) when ``strategy='mean'``.
+            O(1) when ``strategy='constant'`` after shape validation.
         Space Complexity:
-            O(1).
+            O(m * n) in the worst case for a temporary numeric copy.
+            The retained fitted state requires O(n) space.
         """
-        return self
+        self._feature_sums = None
+        self._valid_counts = None
+        self._statistics = None
 
-    def transform(self, X: np.ndarray) -> np.ndarray:
+        return self.partial_fit(X, y)
+
+    def partial_fit(self, X: np.ndarray, y=None) -> Self:
         """
-        Replace ``None`` and/or ``NaN`` values with ``fill_value``.
+        Incrementally update per-feature missing-value estimates using a newly
+        received data chunk.
 
-        Always returns a copy; the source array is never modified.
-        If the array contains no missing values, a plain copy is returned.
+        Previously learned statistics are preserved. When ``strategy='mean'``,
+        valid values are accumulated per feature while ``None`` and NaN values
+        are ignored. The learned replacement statistics are updated after each
+        chunk. When ``strategy='constant'``, no statistics are learned.
 
         Parameters
         ----------
         X : np.ndarray
-            Input array to impute.
+            Incoming data chunk of shape (m, n), where m is the number of rows
+            in the chunk and n is the number of features.
+        y : np.ndarray, optional
+            Ignored. Present for API compatibility.
+
+        Returns
+        -------
+        SimpleImputer
+            The updated imputer instance.
+
+        Raises
+        ------
+        ValueError
+            If ``X`` is not 2D.
+            If ``X`` contains no rows.
+            If ``X`` has a different number of features than previously
+            processed chunks.
+        TypeError
+            If ``strategy='mean'`` and non-missing values cannot be converted
+            to numeric values.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(m * n) when ``strategy='mean'`` because the incoming chunk must
+            be scanned for missing values and accumulated by feature.
+            O(1) when ``strategy='constant'`` after shape validation.
+        Space Complexity:
+            O(m * n) in the worst case for a temporary numeric copy.
+            The retained fitted state requires O(n) space.
+        """
+        X = np.asarray(X)
+
+        if X.ndim != 2:
+            raise ValueError(
+                "X must have 2 dimensions. Reshape your array first."
+            )
+
+        if X.shape[0] == 0:
+            raise ValueError("X must contain at least one row.")
+
+        n_features = X.shape[1]
+
+        if (
+            self._statistics is not None
+            and n_features != len(self._statistics)
+        ):
+            raise ValueError(
+                "Input array has a different number of features than "
+                "the previously fitted array."
+            )
+
+        # Constant replacement does not require learned statistics.
+        if self.strategy == "constant":
+            return self
+
+        numeric_X = X.astype(object, copy=True)
+        none_mask = numeric_X == None  # noqa: E711
+        numeric_X[none_mask] = np.nan
+
+        try:
+            numeric_X = numeric_X.astype("float64")
+        except (TypeError, ValueError) as exc:
+            raise TypeError(
+                "Mean imputation requires numeric non-missing values."
+            ) from exc
+
+        valid_mask = ~np.isnan(numeric_X)
+
+        chunk_sums = np.nansum(numeric_X, axis=0)
+        chunk_valid_counts = np.sum(valid_mask, axis=0)
+
+        if self._feature_sums is None:
+            self._feature_sums = np.zeros(n_features, dtype=float)
+            self._valid_counts = np.zeros(n_features, dtype=int)
+
+        self._feature_sums += chunk_sums
+        self._valid_counts += chunk_valid_counts
+
+        self._statistics = np.divide(
+            self._feature_sums,
+            self._valid_counts,
+            out=np.full(n_features, self.fill_value, dtype=float),
+            where=self._valid_counts != 0
+        )
+
+        return self
+
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        """
+        Replace missing values using the configured imputation strategy.
+
+        When ``strategy='constant'``, every selected missing value is
+        replaced with ``fill_value``. When ``strategy='mean'``, missing
+        values are replaced using the learned per-feature means.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Input data of shape (m, n).
 
         Returns
         -------
@@ -125,31 +263,82 @@ class SimpleImputer(_BasePreprocessor):
         Raises
         ------
         ValueError
-            If ``replace_nan=True`` but unfilled ``None`` values remain
-            in the array.
+            If ``X`` is not 2D.
+            If ``strategy='mean'`` but the imputer has not been fitted.
+            If ``X`` has a different number of features than the fitted data.
+            If unhandled ``None`` values prevent NaN processing.
+        TypeError
+            If ``strategy='mean'`` and input values cannot be converted to
+            numeric values.
 
         Complexity
         ----------
         Time Complexity:
-            O(m * n) to scan the full array for None and NaN values.
+            O(m * n) to scan and replace missing values.
         Space Complexity:
-            O(m * n) for the copied array.
+            O(m * n) for the returned copy.
         """
         new_X = np.asarray(X).copy()
 
-        if self.replace_none:
-            none_mask = new_X == None  # noqa: E711
-            if none_mask.any():
-                new_X[none_mask] = self.fill_value
-                new_X = new_X.astype(float)
+        if new_X.ndim != 2:
+            raise ValueError(
+                "X must have 2 dimensions. Reshape your array first."
+            )
+        
+        if self.strategy == "mean":
+            if self._statistics is None:
+                raise ValueError(
+                    "The SimpleImputer instance is not fitted yet. "
+                    "Call 'fit()' or 'partial_fit()' before using "
+                    "mean imputation."
+                )
 
-        if self.replace_nan:
-            # Can't process `nan`s if the array still contains `None`s
-            none_mask = new_X == None  # noqa: E711
-            if none_mask.any():
-                raise ValueError("Can't process `nan`s while `None`s exist. "
-                                 "Retry with `replace_none` set `True`.")
-            new_X[np.isnan(new_X)] = self.fill_value
+            if new_X.shape[1] != len(self._statistics):
+                raise ValueError(
+                    "Input array has a different number of features "
+                    "than the fitted array."
+                )
+
+            fill_values = self._statistics
+
+        else:
+            fill_values = np.full(
+                new_X.shape[1],
+                self.fill_value,
+                dtype=float
+            )
+
+        for feature_index in range(new_X.shape[1]):
+            column = new_X[: , feature_index]
+
+            if self.replace_none:
+                none_mask = column == None  # noqa: E711
+                if none_mask.any():
+                    column[none_mask] = fill_values[feature_index]
+
+            if self.replace_nan:
+                # Can't process `nan`s if the array still contains `None`s
+                none_mask = column == None  # noqa: E711
+                if none_mask.any():
+                    raise ValueError(
+                        "Can't process `nan`s while `None`s exist. "
+                        "Retry with `replace_none` set `True`."
+                    )
+                
+                # Cast the column so that checking .isnan() work correctly
+                try:
+                    numeric_column = column.astype("float64")
+                except (TypeError, ValueError) as exc:
+                    raise TypeError(
+                        "NaN replacement requires numeric values."
+                    ) from exc
+
+                nan_mask = np.isnan(numeric_column)
+
+                if nan_mask.any():
+                    column[nan_mask] = fill_values[feature_index]
+
+            new_X[:, feature_index] = column
 
         return new_X
 

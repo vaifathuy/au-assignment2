@@ -20,13 +20,13 @@ class TestSimpleImputer:
 
     def test_does_nothing_if_no_nans(self):
         imputer = SimpleImputer(fill_value=5)
-        X = np.arange(6)
+        X = np.arange(4).reshape(2, 2)
         transformed_X = imputer.transform(X)
         assert_array_equal(transformed_X, X)
 
     def test_does_not_modify_origin_array(self):
         imputer = SimpleImputer(fill_value=5)
-        X = np.array([1, float('nan'), 4, 6, np.nan, math.nan, 10])
+        X = np.array([[1, float('nan'), 4, 6, np.nan, math.nan, 10]])
         original_X = X.copy()
         transformed_X = imputer.transform(X)
         assert_array_equal(X, original_X)
@@ -38,21 +38,26 @@ class TestSimpleImputer:
 
     def test_replaces_nans_transform(self):
         imputer = SimpleImputer(fill_value=5)
-        X = np.array([1, float('nan'), 4, 6, np.nan, math.nan, 10])
-        expected_X = np.array([1, 5, 4, 6, 5, 5, 10])
+        X = np.array([
+            [1, float('nan')],
+            [4, 6],
+            [np.nan, math.nan],
+            [10, np.nan]
+        ])
+        expected_X = np.array([[1, 5], [4, 6], [5, 5], [10, 5]])
         transformed_X = imputer.transform(X)
         assert_array_equal(transformed_X, expected_X)
 
     def test_replaces_nans_fit_transform(self):
         imputer = SimpleImputer(fill_value=5)
-        X = np.array([1, float('nan'), 4, 6, np.nan, math.nan, 10])
-        expected_X = np.array([1, 5, 4, 6, 5, 5, 10])
+        X = np.array([[1, float('nan'), 4, 6, np.nan, math.nan, 10]])
+        expected_X = np.array([[1, 5, 4, 6, 5, 5, 10]])
         transformed_X = imputer.fit_transform(X)
         assert_array_equal(transformed_X, expected_X)
 
     def test_replaces_nans_not_nones(self):
         imputer = SimpleImputer(fill_value=5, replace_none=False)
-        X = np.array([1, float('nan'), 4, 6, None, math.nan, 10])
+        X = np.array([[1, float('nan'), 4, 6, None, math.nan, 10]])
         assert_raises_regex(
             ValueError,
             "Can't process `nan`s while `None`s exist. "
@@ -63,10 +68,70 @@ class TestSimpleImputer:
 
     def test_replaces_nans_and_nones(self):
         imputer = SimpleImputer(fill_value=5)
-        X = np.array([1, float('nan'), 4, 6, None, math.nan, 10])
-        expected_X = np.array([1, 5, 4, 6, 5, 5, 10])
+        X = np.array([[1, float('nan'), 4, 6, None, math.nan, 10]])
+        expected_X = np.array([[1, 5, 4, 6, 5, 5, 10]])
         transformed_X = imputer.fit_transform(X)
         assert_array_equal(transformed_X, expected_X)
+
+    def test_replace_nans_whole_column_partial_fit(self):
+        imputer = SimpleImputer(fill_value=-1.0, strategy='mean')
+        X = np.array([
+            [10.0, np.nan],
+            [20.0, np.nan],
+            [30.0, np.nan]
+        ])
+        imputer.partial_fit(X)
+        assert_equal(imputer._feature_sums, [60, 0])
+        assert_equal(imputer._valid_counts, [3, 0])
+        assert_equal(imputer._statistics, [20, -1])
+
+    def test_replace_nans_partial_fit(self):
+        imputer = SimpleImputer(fill_value=-1.0, strategy='mean')
+        X_1 = np.array([
+            [10.0, np.nan],
+            [20.0, np.nan]
+        ])
+        X_2 = np.array([
+            [30.0, 100.0],
+            [40.0, 200.0]
+        ])
+        imputer.partial_fit(X_1)
+        assert_equal(imputer._feature_sums, [30, 0])
+        assert_equal(imputer._valid_counts, [2, 0])
+        assert_equal(imputer._statistics, [15, -1])
+
+        imputer.partial_fit(X_2)
+        assert_equal(imputer._feature_sums, [100, 300])
+        assert_equal(imputer._valid_counts, [4, 2])
+        assert_equal(imputer._statistics, [25, 150])
+
+    def test_replace_nans_nones_partial_fit(self):
+        imputer = SimpleImputer(fill_value=-1.0, strategy='mean')
+        X = np.array([
+            [10.0, None, np.nan],
+            [20.0, None, 30.0],
+            [None, None, 60.0]
+        ], dtype=object)
+
+        imputer.partial_fit(X)
+        assert_equal(imputer._feature_sums, [30, 0, 90])
+        assert_equal(imputer._valid_counts, [2, 0, 2])
+        assert_equal(imputer._statistics, [15, -1, 45])
+
+    def test_replace_nans_nones_partial_fit_transform(self):
+        imputer = SimpleImputer(fill_value=-1.0, strategy='mean')
+        X = np.array([
+            [10.0, None, np.nan],
+            [20.0, None, 30.0],
+            [None, None, 60.0]
+        ], dtype=object)
+        expected_X = np.array([
+            [10.0, -1.0, 45.0],
+            [20.0, -1.0, 30.0],
+            [15.0, -1.0, 60.0]
+        ])
+        imputer.partial_fit(X)
+        assert_array_equal(imputer.transform(X), expected_X)
 
 
 class TestMinMaxScaler:
