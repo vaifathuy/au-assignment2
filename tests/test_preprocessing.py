@@ -173,6 +173,24 @@ class TestMinMaxScaler:
         X = np.array([[1, 2], [3, 4j]])
         assert_raises(ValueError, scaler.transform, X)
 
+    def test_simple_partial_fit(self):
+        scaler = MinMaxScaler()
+        X = np.array([[2, 10], [6, 20], [1, 30], [8, 15]])
+        scaler.partial_fit(X[:2])
+        scaler.partial_fit(X[2:])
+        assert_equal(scaler._feature_mins, [1, 10])
+        assert_equal(scaler._feature_maxs, [8, 30])
+        assert_equal(scaler._feature_ranges, [7, 20])
+
+    def test_simple_partial_fit_transform(self):
+        scaler = MinMaxScaler()
+        X = np.array([[1, 2], [3, 4]])
+        expected_X = np.array([[0, 0], [1, 1]])
+        scaler.partial_fit(X[:1])
+        scaler.partial_fit(X[1:])
+        transformed_X = scaler.transform(X)
+        assert_array_equal(transformed_X, expected_X)
+
 
 class TestStandardScaler:
 

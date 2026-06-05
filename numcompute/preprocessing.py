@@ -175,12 +175,18 @@ class MinMaxScaler(_BasePreprocessor):
 
         # attributes to fit
         self._feature_mins = None
+        self._feature_maxs = None
         self._feature_ranges = None
 
     def fit(self, X: np.ndarray, y=None) -> Self:
         """
         Compute and store the per-feature minimum and value range from
         training data.
+
+        Any previously learned state is discarded before fitting. This makes
+        ``fit()`` suitable for traditional batch learning. To preserve the
+        existing state and incorporate an additional data chunk, use
+        ``partial_fit()`` instead.
 
         Parameters
         ----------
@@ -199,35 +205,97 @@ class MinMaxScaler(_BasePreprocessor):
         ------
         ValueError
             If ``X`` is not 2D.
+            If ``X`` contains no rows.
             If ``X`` contains None, NaN, infinite, or complex values.
             If any feature's value range exceeds float64 limits.
+        TypeError:
+            If ``X`` is not a numeric array.
 
         Complexity
         ----------
         Time Complexity:
-            O(m * n) for computing per-feature min and range across all rows.
+            O(m * n) for calculating per-feature minima and maxima.
         Space Complexity:
-            O(n) to store the per-feature min and range arrays.
+            O(m * n) in the worst case for converting ``X`` to float64.
+            The retained fitted state requires O(n) space.
         """
+        self._feature_mins = None
+        self._feature_maxs = None
+        self._feature_ranges = None
+
+        return self.partial_fit(X, y)
+
+    def partial_fit(self, X: np.ndarray, y=None) -> Self:
+        """
+        Incrementally Update the per-feature minimum, maximum, and range.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Incoming data chunk of shape (n_rows, n_features).
+        y : np.ndarray, optional
+            Ignored. Present for API compatibility.
+
+        Returns
+        -------
+        MinMaxScaler
+            The updated scaler instance.
+
+        Raises
+        ------
+        ValueError
+            If ``X`` is not 2D.
+            If ``X`` contains no rows.
+            If ``X`` contains None, NaN, infinite, or complex values.
+            If any feature's value range exceeds float64 limits.
+        TypeError:
+            If ``X`` is not a numeric array.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(m * n) for calculating the incoming chunk's per-feature minima
+            and maxima.
+        Space Complexity:
+            O(m * n) in the worst case for converting ``X`` to float64.
+            The retained fitted state requires O(n) space.
+        """
+
         if X.ndim != 2:
             raise ValueError(
-                "X must have 2 dimensions. Reshape your array first"
+                "X must have 2 dimensions. Reshape your array first."
             )
 
         validate_numeric_array(data=X)
 
-        # Cast to float64 before computing ptp to avoid silent integer overflow
-        # (e.g. int8 range of [-128, 127] wraps to -1 in signed arithmetic).
-        new_arr = X.astype('float64')
-        self._feature_mins = np.min(new_arr, axis=0)
-        self._feature_ranges = np.ptp(new_arr, axis=0)
+        if X.shape[0] == 0:
+            raise ValueError("X must contain at least one row.")
+
+        X = X.astype("float64")
+        n_features = X.shape[1]
+
+        chunck_mins = np.min(X, axis=0)
+        chunck_maxs = np.max(X, axis=0)
+
+        if self._feature_mins is None:
+            self._feature_mins = chunck_mins
+            self._feature_maxs = chunck_maxs
+        elif n_features != len(self._feature_mins):
+            raise ValueError(
+                "Input array has a different number of features than "
+                "the previously fitted array."
+            )
+        else:
+            self._feature_mins = np.minimum(self._feature_mins, chunck_mins)
+            self._feature_maxs = np.maximum(self._feature_maxs, chunck_maxs)
+
+        self._feature_ranges = self._feature_maxs - self._feature_mins
 
         if np.isinf(self._feature_ranges).any():
             raise ValueError(
                 "Feature value range exceeds float64 limits. "
                 "Scale your data before fitting."
             )
-
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
@@ -265,7 +333,11 @@ class MinMaxScaler(_BasePreprocessor):
 
         validate_numeric_array(data=X)
 
-        if self._feature_mins is None or self._feature_ranges is None:
+        if (
+            self._feature_mins is None
+            or self._feature_maxs is None
+            or self._feature_ranges is None
+        ):
             raise ValueError("You must call fit() before transform()")
 
         if X.shape[1] != len(self._feature_mins):
@@ -312,7 +384,7 @@ class StandardScaler(_BasePreprocessor):
     def fit(self, X: np.ndarray, y=None) -> Self:
         """
         Compute and store the per-feature mean and standard deviation.
-        It is designed to perform batch-processing, so it reset the interal 
+        It is designed to perform batch-processing, so it reset the interal
         states.
 
         Uses the population standard deviation (ddof=0), consistent with
