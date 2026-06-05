@@ -77,12 +77,12 @@ class SimpleImputer(_BasePreprocessor):
         if not replace_nan and not replace_none:
             raise ValueError("Must have at least one of replace_nan or "
                              "replace_none set to True.")
-        
+
         if strategy not in {"constant", "mean"}:
             raise ValueError(
                 "strategy must be either 'constant' or 'mean'."
             )
-    
+
         self.fill_value = fill_value
         self.replace_nan = replace_nan
         self.replace_none = replace_none
@@ -284,7 +284,7 @@ class SimpleImputer(_BasePreprocessor):
             raise ValueError(
                 "X must have 2 dimensions. Reshape your array first."
             )
-        
+
         if self.strategy == "mean":
             if self._statistics is None:
                 raise ValueError(
@@ -324,7 +324,7 @@ class SimpleImputer(_BasePreprocessor):
                         "Can't process `nan`s while `None`s exist. "
                         "Retry with `replace_none` set `True`."
                     )
-                
+
                 # Cast the column so that checking .isnan() work correctly
                 try:
                     numeric_column = column.astype("float64")
