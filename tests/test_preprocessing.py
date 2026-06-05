@@ -10,6 +10,7 @@ from numpy.testing import (
     assert_raises,
     assert_raises_regex,
     assert_allclose,
+    assert_equal,
 )
 import math
 import pytest
@@ -175,7 +176,7 @@ class TestMinMaxScaler:
 
 class TestStandardScaler:
 
-    def test_simple_case(self):
+    def test_simple_batch_fit_transform(self):
         scaler = StandardScaler()
         X = np.array([[1, 2], [3, 4], [5, 6]])
         expected_X = np.array([[-1.22474487, -1.22474487],
@@ -247,6 +248,27 @@ class TestStandardScaler:
         assert_raises(ValueError, scaler.transform, X)
         X = np.array([[1, 2], [3, 4j]])
         assert_raises(ValueError, scaler.transform, X)
+
+    def test_simple_partial_fit(self):
+        scaler = StandardScaler()
+        X = np.array([[2, 10], [6, 20], [10, 30]])
+        scaler.partial_fit(X[:2])
+        scaler.partial_fit(X[2:])
+        assert_equal(scaler._count, 3)
+        assert_allclose(scaler._mean, [6, 20])
+        assert_allclose(scaler._M2, [32, 200])
+        assert_allclose(scaler._std, [3.26598632, 8.16496581])
+
+    def test_simple_partial_fit_transform(self):
+        scaler = StandardScaler()
+        X = np.array([[1, 2], [3, 4], [5, 6]])
+        scaler.partial_fit(X[:2])
+        scaler.partial_fit(X[2:])
+        expected_X = np.array([[-1.22474487, -1.22474487],
+                               [0, 0],
+                               [1.22474487, 1.22474487]])
+        transformed_X = scaler.transform(X)
+        assert_allclose(transformed_X, expected_X)
 
 
 class TestOneHotEncoder:

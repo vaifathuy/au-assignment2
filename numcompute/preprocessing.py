@@ -16,6 +16,11 @@ class _BasePreprocessor(ABC):
         """This method must be implemented by any subclass."""
         pass
 
+    # @abstractmethod
+    # def partial_fit(self, X: np.ndarray, y=None) -> Self:
+    #     """This method must be implemented by any subclass."""
+    #     pass
+
     @abstractmethod
     def transform(self, X: np.ndarray) -> np.ndarray:
         """This method must be implemented by any subclass."""
@@ -299,12 +304,16 @@ class StandardScaler(_BasePreprocessor):
     """
 
     def __init__(self):
+        self._count = 0
         self._mean = None
         self._std = None
+        self._M2 = None
 
     def fit(self, X: np.ndarray, y=None) -> Self:
         """
         Compute and store the per-feature mean and standard deviation.
+        It is designed to perform batch-processing, so it reset the interal 
+        states.
 
         Uses the population standard deviation (ddof=0), consistent with
         NumPy and scikit-learn defaults.
@@ -320,19 +329,64 @@ class StandardScaler(_BasePreprocessor):
         -------
         StandardScaler
             The fitted instance.
-
-        Complexity
-        ----------
-        Time Complexity:
-            O(m * n) for computing per-feature mean and standard deviation.
-        Space Complexity:
-            O(n) to store the per-feature mean and standard deviation arrays.
         """
+
+        self._count = 0
+        self._mean = None
+        self._M2 = None
+        self._std = None
+
+        return self.partial_fit(X, y)
+
+    def partial_fit(self, X, y=None) -> Self:
+        """
+        Incrementally update the running mean and standard deviation.
+
+        Uses Welford's online algorithm to update statistics one row at a time
+        without storing previously observed chunks.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Incoming data chunk of shape (n_rows, n_features).
+        y : np.ndarray, optional
+            Ignored. Present for API compatibility.
+
+        Returns
+        -------
+        StandardScaler
+            The updated scaler instance.
+        """
+
+        if X.ndim != 2:
+            raise ValueError(
+                "X must have 2 dimensions. Reshape your array first"
+            )
 
         validate_numeric_array(data=X)
 
-        self._mean = np.mean(X, axis=0)
-        self._std = np.std(X, axis=0)
+        X = X.astype("float64")
+        n_features = X.shape[1]
+
+        if self._mean is None:
+            self._mean = np.zeros(n_features, dtype=float)
+            self._M2 = np.zeros(n_features, dtype=float)
+        elif n_features != len(self._mean):
+            ValueError(
+                "Input array has a different number of features than "
+                "the previously fitted array."
+            )
+
+        # Apply Welford's update
+        for row in X:
+            self._count += 1
+            delta_1 = row - self._mean
+            self._mean += delta_1 / self._count
+            delta_2 = row - self._mean
+            self._M2 += delta_1 * delta_2
+
+        self._std = np.sqrt(self._M2 / self._count)
+
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
