@@ -16,10 +16,10 @@ class _BasePreprocessor(ABC):
         """This method must be implemented by any subclass."""
         pass
 
-    # @abstractmethod
-    # def partial_fit(self, X: np.ndarray, y=None) -> Self:
-    #     """This method must be implemented by any subclass."""
-    #     pass
+    @abstractmethod
+    def partial_fit(self, X: np.ndarray, y=None) -> Self:
+        """This method must be implemented by any subclass."""
+        pass
 
     @abstractmethod
     def transform(self, X: np.ndarray) -> np.ndarray:
@@ -728,19 +728,27 @@ class OneHotEncoder(_BasePreprocessor):
     """
 
     def __init__(self, handle_unknown: str = "ignore"):
+        if handle_unknown not in {"ignore", "error"}:
+            raise ValueError(
+                "handle_unknown must be either 'ignore' or 'error'."
+            )
+
         self.handle_unknown = handle_unknown
         self._categories = None
 
     def fit(self, X: np.ndarray, y=None) -> Self:
         """
         Identify and store the unique categories for each feature.
+        It is designed to perform batch-processing, so it resets the interal
+        states.
 
         Parameters
         ----------
         X : np.ndarray
-            Training data of shape (m, n). Must be 2D.
+            Training data of shape (m, n). Must be 2D and must not
+            contain ``None`` values.
         y : np.ndarray, optional
-            Ignored. Present for API compliance.
+            Ignored. Present for API compatibility.
 
         Returns
         -------
@@ -750,18 +758,92 @@ class OneHotEncoder(_BasePreprocessor):
         Raises
         ------
         ValueError
-            If ``X`` is not 2D or contains ``None`` values.
+            If ``X`` is not 2D.
+            If ``X`` contains no rows.
+            If ``X`` contains ``None`` values.
+            If numeric ``X`` contains NaN, infinite, or complex values.
+        TypeError
+            If numeric ``X`` is not a valid numeric array.
 
         Complexity
         ----------
         Time Complexity:
-            O(m * n * log(m)) — ``np.unique`` sorts each column of m rows
-            across n columns.
+            O(n * m log m) for identifying unique categories in each feature.
         Space Complexity:
-            O(total unique categories across all features) to store
-            ``_categories``.
+            O(c) for retaining the unique categories, where c is the total
+            number of unique categories across all features.
         """
-        if np.any(X == None): # noqa
+        # if np.any(X == None): # noqa
+        #     raise ValueError(
+        #         "X contains None values. Handle these then try again."
+        #     )
+
+        # if np.issubdtype(X.dtype, np.number):
+        #     validate_numeric_array(data=X)
+
+        # if X.ndim != 2:
+        #     raise ValueError("X must be a 2D array")
+
+        # self._categories = [np.unique(X[:, i]) for i in range(X.shape[1])]
+
+        self._categories = None
+
+        return self.partial_fit(X, y)
+
+    def partial_fit(self, X: np.ndarray, y=None) -> Self:
+        """
+        Incrementally identify and store the unique categories
+        for each feature.
+
+        Previously learned category positions are preserved. Categories that
+        have not been observed before are appended to the end of the relevant
+        feature's category array. Existing category indexes never shift.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Incoming data chunk of shape (m, n), where m is the number of rows
+            and n is the number of categorical features. Must be 2D and must
+            not contain ``None`` values.
+        y : np.ndarray, optional
+            Ignored. Present for API compatibility.
+
+        Returns
+        -------
+        OneHotEncoder
+            The updated instance.
+
+        Raises
+        ------
+        ValueError
+            If ``X`` is not 2D.
+            If ``X`` contains no rows.
+            If ``X`` contains ``None`` values.
+            If ``X`` has a different number of features than previously
+            processed chunks.
+            If numeric ``X`` contains NaN, infinite, or complex values.
+        TypeError
+            If numeric ``X`` is not a valid numeric array.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(n * m log m + u * c), where n is the number of features,
+            m is the number of rows in the new chunk, u is the number of unique
+            incoming categories, and c is the number of previously learned
+            categories.
+        Space Complexity:
+            O(c + u) for retaining existing and newly discovered categories.
+        """
+        X = np.asarray(X)
+
+        if X.ndim != 2:
+            raise ValueError("X must be a 2D array.")
+
+        if X.shape[0] == 0:
+            raise ValueError("X must contain at least one row.")
+
+        if (X == None).any():  # noqa: E711
             raise ValueError(
                 "X contains None values. Handle these then try again."
             )
@@ -769,10 +851,37 @@ class OneHotEncoder(_BasePreprocessor):
         if np.issubdtype(X.dtype, np.number):
             validate_numeric_array(data=X)
 
-        if X.ndim != 2:
-            raise ValueError("X must be a 2D array")
+        n_features = X.shape[1]
 
-        self._categories = [np.unique(X[:, i]) for i in range(X.shape[1])]
+        # First chunk: initialize categories.
+        if self._categories is None:
+            self._categories = [
+                np.unique(X[:, i])
+                for i in range(n_features)
+            ]
+
+            return self
+
+        if n_features != len(self._categories):
+            raise ValueError(
+                "Input array has a different number of features than "
+                "the previously fitted array."
+            )
+
+        for feature_index in range(n_features):
+            existing_categories = self._categories[feature_index]
+
+            incoming_categories = np.unique(X[:, feature_index])
+
+            unseen_categories = incoming_categories[
+                ~np.isin(incoming_categories, existing_categories)
+            ]
+
+            if unseen_categories.size > 0:
+                self._categories[feature_index] = np.concatenate([
+                    existing_categories,
+                    unseen_categories
+                ])
 
         return self
 
@@ -799,10 +908,15 @@ class OneHotEncoder(_BasePreprocessor):
         Raises
         ------
         ValueError
-            If ``fit()`` has not been called.
-            If the number of features in ``X`` does not match the fitted array.
-            If unknown categories are encountered and
+            If ``X`` is not 2D.
+            If ``X`` contains ``None`` values.
+            If ``fit()`` or ``partial_fit()`` has not been called.
+            If ``X`` has a different number of features than the fitted data.
+            If unknown categories are encountered while
             ``handle_unknown='error'``.
+            If numeric ``X`` contains NaN, infinite, or complex values.
+        TypeError
+            If numeric ``X`` is not a valid numeric array.
 
         Complexity
         ----------
@@ -813,6 +927,7 @@ class OneHotEncoder(_BasePreprocessor):
             O(m * total unique categories across all features) for the
             one-hot encoded output array.
         """
+        X = np.asarray(X)
 
         if np.any(X is None):
             raise ValueError(
@@ -834,31 +949,24 @@ class OneHotEncoder(_BasePreprocessor):
             )
 
         blocks = []
-        for i, category_values in enumerate(self._categories):
-            feature_col = X[:, i]
-            # get the category_values index for every row in this feature_col
-            indices = np.searchsorted(category_values, feature_col)
-            # stability: if a value in feature_col is larger than all values in
-            # category_values, searchsorted will return an index that is out
-            # of bounds.
-            np.clip(indices, 0, len(category_values) - 1, out=indices)
+        for feature_index, category_values in enumerate(self._categories):
+            feature_col = X[:, feature_index]
+            # compare every row value against every learned category
+            matches = feature_col[:, None] == category_values[None, :]
 
-            # create the one-hot block for this column
-            block = np.zeros((X.shape[0], len(category_values)), dtype=int)
-            block[np.arange(X.shape[0]), indices] = 1
+            unknown_mask = ~np.any(matches, axis=1)
 
-            # searchsorted above will not handle unknown categories, so we
-            # check for these after and handle as per `handle_unknown``
-            missing_mask = ~np.isin(feature_col, category_values)
-            if missing_mask.any():
-                bad_indexes = np.where(missing_mask)[0]
+            if unknown_mask.any() and self.handle_unknown == "error":
+                bad_indexes = np.where(unknown_mask)[0]
                 bad_values = feature_col[bad_indexes]
-                if self.handle_unknown == "error":
-                    raise ValueError(f"Column {i} contains unseen "
-                                     f"values {bad_values} at row indexes "
-                                     f"{bad_indexes}")
-                else:
-                    block[missing_mask, :] = 0
 
-            blocks.append(block)
+                raise ValueError(
+                    f"Column {feature_index} contains unseen "
+                    f"values {bad_values} at row indexes "
+                    f"{bad_indexes}."
+                )
+
+            # Rows with unknown values naturally remain all zeros.
+            blocks.append(matches.astype(int))
+
         return np.hstack(blocks)

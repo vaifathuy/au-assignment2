@@ -467,3 +467,53 @@ class TestOneHotEncoder:
             scaler.transform,
             X_test
         )
+
+    def test_partial_fit(self):
+        encoder = OneHotEncoder()
+        X_train_1 = np.array([
+            ["blue"],
+            ["red"],
+            ["green"]
+        ])
+        encoder.partial_fit(X_train_1)
+        assert_array_equal(
+            encoder._categories,
+            [["blue", "green", "red"]]
+        )
+
+        X_train_2 = np.array([["blue"], ["blue"], ["blue"], ["silver"]])
+        encoder.partial_fit(X_train_2)
+        assert_array_equal(
+            encoder._categories,
+            [["blue", "green", "red", "silver"]]
+        )
+
+    def test_partial_fit_multiple_col(self):
+        encoder = OneHotEncoder()
+        X_train_1 = np.array([
+            ["blue", "large"],
+            ["red", "small"],
+            ["green", "medium"]
+        ])
+        encoder.partial_fit(X_train_1)
+        assert_array_equal(
+            encoder._categories,
+            [
+                ["blue", "green", "red"],
+                ["large", "medium", "small"]
+            ]
+        )
+
+        X_train_2 = np.array([
+            ["blue", "large"],
+            ["grey", "large"],
+            ["green", "extra-small"]
+        ])
+        encoder.partial_fit(X_train_2)
+        assert_array_equal(
+            encoder._categories,
+            [
+                ["blue", "green", "red", "grey"],
+                ["large", "medium", "small", "extra-small"]
+            ]
+        )
