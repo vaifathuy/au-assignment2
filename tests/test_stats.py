@@ -1,4 +1,7 @@
-from numcompute.stats import Statistics, histogram, quantile, Histogram
+from numcompute.stats import (
+    Statistics, Histogram, Quantile,
+    histogram, quantile
+)
 from numpy.testing import assert_allclose, assert_array_equal, assert_equal
 import pytest
 import numpy as np
@@ -277,7 +280,7 @@ class TestHistogram:
         assert np.allclose(edges, np.array([0, 60, 100]))
 
 
-class TestQuantile():
+class TestQuantile:
 
     def test_quantile(self):
         q = quantile(np.array([10, 20, 30, 40]), np.array([0.5]))
@@ -505,3 +508,115 @@ class TestHistogramStream:
             match="density must be a boolean or None"
         ):
             hist.result(density="yes")
+
+
+class TestQuantileStream:
+    def test_update_stats_accumulates_chunks(self):
+        stream = Quantile()
+        stream.update_stats(np.array([50, 10, 30]))
+        stream.update_stats(np.array([20, 40]))
+        assert_equal(stream.count, 5)
+        assert_array_equal(
+            stream.values,
+            np.array([
+                50.0,
+                10.0,
+                30.0,
+                20.0,
+                40.0
+            ])
+        )
+
+    def test_result_median(self):
+        stream = Quantile()
+        stream.update_stats(np.array([50, 10, 30]))
+        stream.update_stats(np.array([20, 40]))
+        assert_allclose(stream.result(q=0.5), 30.0)
+
+    def test_result_accepts_random_quantile(self):
+        stream = Quantile()
+        stream.update_stats(np.array([10, 20, 30, 40, 50]))
+        assert_allclose(stream.result(q=0.18), 17.2)
+
+    def test_result_accepts_multiple_quantiles(self):
+        stream = Quantile()
+        stream.update_stats(np.array([50, 10, 30, 20, 40]))
+        assert_array_equal(
+            stream.result(q=np.array([0.25, 0.50, 0.75])),
+            np.array([20.0, 30.0, 40.0])
+        )
+
+    def test_reset_clears_previous_observations(self):
+        stream = Quantile()
+        stream.update_stats(np.array([10, 20, 30]))
+        stream.reset()
+        assert_equal(stream.count, 0)
+        assert_array_equal(stream.values, np.array([], dtype=float))
+
+    def test_update_stats_copies_source_array(self):
+        stream = Quantile()
+        source_values = np.array([10, 20, 30])
+        stream.update_stats(source_values)
+        source_values[0] = 999
+
+        assert_array_equal(
+            stream.values,
+            np.array([10.0, 20.0, 30.0])
+        )
+
+    def test_result_raises_before_receiving_observations(self):
+        stream = Quantile()
+
+        with pytest.raises(
+            ValueError,
+            match="No observations have been accumulated yet"
+        ):
+            stream.result(q=0.5)
+
+    def test_update_stats_rejects_empty_chunk(self):
+        stream = Quantile()
+
+        with pytest.raises(
+            ValueError,
+            match="Input chunk must contain at least one value"
+        ):
+            stream.update_stats(np.array([]))
+
+    def test_result_rejects_empty_q_array(self):
+        stream = Quantile()
+        stream.update_stats(np.array([10, 20, 30]))
+
+        with pytest.raises(
+            ValueError,
+            match="q must contain at least one value"
+        ):
+            stream.result(q=np.array([]))
+
+    def test_update_stats_rejects_non_numeric_values(self):
+        stream = Quantile()
+
+        with pytest.raises(TypeError):
+            stream.update_stats(
+                np.array([
+                    "low",
+                    "medium",
+                    "high"
+                ])
+            )
+
+    def test_result_rejects_unsupported_method(self):
+        stream = Quantile()
+
+        stream.update_stats(
+            np.array([
+                10,
+                20,
+                30
+            ])
+        )
+
+        with pytest.raises(ValueError):
+            stream.result(
+                q=0.5,
+                method="unsupported"
+            )

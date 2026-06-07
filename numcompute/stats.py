@@ -797,3 +797,168 @@ class Histogram:
         Return the number of processed observations.
         """
         return self._n_observations
+
+
+class Quantile:
+    def __init__(self):
+        self.reset()
+
+    @property
+    def count(self) -> int:
+        """
+        Return the total number of retained observations.
+        """
+        return self._count
+
+    @property
+    def values(self) -> np.ndarray:
+        """
+        Return a copy of all retained observations as a flattened array.
+        """
+        if self._count == 0:
+            return np.array([], dtype=float)
+
+        return np.concatenate(self._chunks).copy()
+
+    def update_stats(self, a: np.ndarray) -> Self:
+        """
+        Incrementally retain observations from a newly received data chunk.
+
+        Parameters
+        ----------
+        a : np.ndarray
+            Incoming numeric data chunk. The array may have any shape because
+            values are flattened internally.
+
+        Returns
+        -------
+        Quantile
+            The updated quantile instance.
+
+        Raises
+        ------
+        ValueError
+            If ``a`` is empty.
+            If ``a`` contains ``None``, NaN, infinite, or complex values.
+        TypeError
+            If ``a`` is not numeric.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(m), where m is the number of values in the incoming chunk.
+        Space Complexity:
+            O(m) additional retained memory for the incoming chunk.
+            Total retained memory becomes O(n), where n is the total number
+            of observations received so far.
+        """
+        values = np.asarray(a)
+
+        if values.size == 0:
+            raise ValueError(
+                "Input chunk must contain at least one value."
+            )
+
+        validate_numeric_array(values)
+
+        values = values.astype("float64", copy=False).ravel()
+        self._chunks.append(values.copy())
+        self._count += values.size
+
+        return self
+
+    def result(
+        self,
+        q: float | np.ndarray,
+        method: str = "linear"
+    ) -> float | np.ndarray:
+        """
+        Calculate exact quantile values from all retained observations.
+
+        Parameters
+        ----------
+        q : float or np.ndarray
+            Requested quantile position or positions in the range [0, 1].
+
+            Examples:
+            - ``0.18`` requests the 18th percentile.
+            - ``0.5`` requests the median.
+            - ``[0.25, 0.5, 0.75]`` requests the quartiles.
+        method : str, optional
+            Quantile estimation method passed to ``np.quantile()``.
+            Default is ``'linear'``.
+
+        Returns
+        -------
+        float or np.ndarray
+            Exact quantile value or values.
+
+        Raises
+        ------
+        ValueError
+            If no observations have been added.
+            If ``q`` is empty.
+            If any value in ``q`` falls outside the range [0, 1].
+            If ``q`` contains ``None``, NaN, infinite, or complex values.
+            If ``method`` is not supported by NumPy.
+        TypeError
+            If ``q`` is not numeric.
+            If ``method`` is not a string.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(n) to combine retained chunks, plus the cost of
+            ``np.quantile()`` over n retained observations.
+        Space Complexity:
+            O(n) for the temporary combined array, where n is the total
+            number of retained observations.
+        """
+        if self._count == 0:
+            raise ValueError(
+                "No observations have been accumulated yet."
+            )
+
+        q_values = np.asarray(q)
+
+        if q_values.size == 0:
+            raise ValueError(
+                "q must contain at least one value."
+            )
+
+        validate_numeric_array(q_values)
+
+        q_values = q_values.astype("float64", copy=False)
+
+        if (np.any(q_values < 0) or np.any(q_values > 1)):
+            raise ValueError(
+                "q must contain values between 0 and 1."
+            )
+
+        if not isinstance(method, str):
+            raise TypeError(
+                "method must be a string."
+            )
+
+        return np.quantile(self.values, q=q_values, method=method)
+
+    def reset(self) -> Self:
+        """
+        Clear all retained observations.
+
+        Returns
+        -------
+        Quantile
+            The reset quantile instance.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1)
+        Space Complexity:
+            O(1) after previously retained chunks are released.
+        """
+        self._chunks = []
+        self._count = 0
+
+        return self
