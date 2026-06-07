@@ -288,6 +288,7 @@ class Statistics:
         return np.sqrt(self.variance(ddof=ddof))
 
 
+# Existing one-off histogram function
 def histogram(
     a: np.ndarray,
     bins: int | np.ndarray | str = 10,
@@ -345,6 +346,7 @@ def histogram(
                         density=density, weights=weights)
 
 
+# Existing one-off quantile function
 def quantile(
     a: np.ndarray,
     q: np.ndarray,
@@ -411,3 +413,387 @@ def quantile(
         a, q, axis=axis, out=out, overwrite_input=overwrite_input,
         method=method, keepdims=keepdims, weights=weights
     )
+
+
+# Streaming Histogram
+class Histogram:
+    """
+    Incrementally accumulate histogram counts from incoming numeric chunks.
+
+    It retains fixed bin edges and adds the counts from each newly received
+    chunk to its previously accumulated counts.
+    Fixed edges are necessary for streaming updates because each bin must
+    continue to represent the same numeric interval across all chunks.
+
+    Examples
+    --------
+    Explicit bin edges:
+
+    >>> hist = Histogram(bins=np.array([0, 10, 20, 30]))
+    >>> hist.update_stats(np.array([2, 7, 15]))
+    >>> hist.update_stats(np.array([12, 25]))
+    >>> hist.counts
+    array([2, 2, 1])
+
+    Number of bins with a fixed range:
+
+    >>> hist = Histogram(bins=3, range=(0, 30))
+    >>> hist.update_stats(np.array([2, 7, 15, 12, 25]))
+    >>> hist.counts
+    array([2, 2, 1])
+    """
+
+    def __init__(
+        self,
+        bins: int | np.ndarray | list,
+        range: tuple[float, float] | None = None,
+        density: bool = False
+    ):
+        """
+        Initialize a stateful histogram.
+
+        Parameters
+        ----------
+        bins : int, np.ndarray, or list
+            Histogram bin configuration.
+
+            If an integer is supplied, ``range`` must also be provided.
+            For example, ``bins=3`` and ``range=(0, 30)`` creates the edges
+            ``[0, 10, 20, 30]``.
+
+            If an array-like value is supplied, it must contain explicit,
+            strictly increasing bin edges. For example,
+            ``[0, 10, 20, 30]`` creates three bins.
+        range : tuple of float, optional
+            Lower and upper bounds used to construct equal-width bins when
+            ``bins`` is an integer. Must not be supplied when explicit bin
+            edges are used.
+        density : bool, optional
+            Whether ``result()`` returns probability densities rather than
+            raw counts by default. Raw counts are always retained internally.
+            Default is False.
+
+        Raises
+        ------
+        ValueError
+            If ``bins`` is not a positive integer.
+            If integer ``bins`` is supplied without ``range``.
+            If explicit bin edges are not 1D.
+            If explicit bin edges contain fewer than two values.
+            If explicit bin edges are not strictly increasing.
+            If ``range`` does not contain exactly two values.
+            If the upper range boundary is not greater than the lower
+            boundary.
+            If bin edges or range values contain ``None``, NaN, infinite,
+            or complex values.
+        TypeError
+            If ``bins`` is not an integer or array-like collection of
+            numeric edges.
+            If ``density`` is not a boolean.
+        """
+        if not isinstance(density, bool):
+            raise TypeError("density must be a boolean.")
+
+        self.density = density
+        self._bin_edges = self._create_bin_edges(
+            bins=bins,
+            range=range
+        )
+
+        self.reset()
+
+    @staticmethod
+    def _create_bin_edges(
+        bins: int | np.ndarray | list,
+        range: tuple[float, float] | None
+    ) -> np.ndarray:
+        if isinstance(bins, bool):
+            raise TypeError(
+                "bins must be a positive integer or a 1D array-like "
+                "collection of numeric edges."
+            )
+
+        if isinstance(bins, (int, np.integer)):
+            if bins <= 0:
+                raise ValueError("bins must be greater than zero.")
+
+            if range is None:
+                raise ValueError(
+                    "range must be provided when bins is an integer "
+                    "because streaming histograms require fixed edges."
+                )
+
+            lower, upper = Histogram._validate_range(range)
+
+            return np.linspace(
+                lower,
+                upper,
+                num=bins + 1,
+                dtype=float
+            )
+
+        if range is not None:
+            raise ValueError(
+                "range must not be supplied when bins contains explicit "
+                "bin edges."
+            )
+
+        edges = np.asarray(bins)
+
+        if edges.ndim != 1:
+            raise ValueError("Explicit histogram bin edges must be 1D.")
+
+        if edges.size < 2:
+            raise ValueError(
+                "Explicit histogram bin edges must contain at least "
+                "two values."
+            )
+
+        validate_numeric_array(edges)
+
+        edges = edges.astype("float64", copy=False)
+
+        if not np.all(np.diff(edges) > 0):
+            raise ValueError(
+                "Explicit histogram bin edges must be strictly increasing."
+            )
+
+        # Return the copy to avoid future alter from external code
+        return edges.copy()
+
+    @staticmethod
+    def _validate_range(
+        range: tuple[float, float]
+    ) -> tuple[float, float]:
+        """
+        Validate the fixed numeric range used to construct equal-width bins.
+        """
+        range_values = np.asarray(range)
+
+        if range_values.shape != (2,):
+            raise ValueError(
+                "range must contain exactly two values: "
+                "(lower_bound, upper_bound)."
+            )
+
+        validate_numeric_array(range_values)
+
+        lower = float(range_values[0])
+        upper = float(range_values[1])
+
+        if upper <= lower:
+            raise ValueError(
+                "The upper histogram range boundary must be greater than "
+                "the lower boundary."
+            )
+
+        return lower, upper
+
+    def update_stats(
+        self,
+        a: np.ndarray,
+        weights: np.ndarray | None = None
+    ) -> Self:
+        """
+        Incrementally add the histogram counts from a newly received chunk.
+
+        The chunk may have any shape. Values are flattened internally, which
+        matches the behaviour of ``np.histogram()`` and the existing
+        standalone ``histogram()`` wrapper.
+
+        Values outside the configured bin edges are rejected rather than
+        silently ignored. This ensures that the accumulated histogram remains
+        consistent with the number of processed observations.
+
+        Parameters
+        ----------
+        a : np.ndarray
+            Incoming numeric data chunk.
+        weights : np.ndarray, optional
+            Contribution weight for each value. Must have the same shape as
+            ``a``. When omitted, every value contributes 1.
+
+        Returns
+        -------
+        Histogram
+            The updated histogram instance.
+
+        Raises
+        ------
+        ValueError
+            If ``a`` is empty.
+            If ``a`` contains ``None``, NaN, infinite, or complex values.
+            If any value falls outside the configured histogram range.
+            If ``weights`` does not have the same shape as ``a``.
+            If ``weights`` contains ``None``, NaN, infinite, or complex
+            values.
+        TypeError
+            If ``a`` or ``weights`` is not numeric.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(n), where n is the number of values in the incoming chunk.
+        Space Complexity:
+            O(n + k), where k is the number of histogram bins.
+        """
+        values = np.asarray(a)
+
+        if values.size == 0:
+            raise ValueError("Input chunk must contain at least one value.")
+
+        validate_numeric_array(values)
+
+        values = values.astype("float64", copy=False).ravel()
+
+        flattened_weights = None
+
+        if weights is not None:
+            weights_array = np.asarray(weights)
+            if weights_array.shape != np.asarray(a).shape:
+                raise ValueError(
+                    "weights must have the same shape as the input chunk."
+                )
+
+            validate_numeric_array(weights_array)
+
+            flattened_weights = weights_array.astype(
+                "float64", copy=False
+            ).ravel()
+
+        lower_edge = self._bin_edges[0]
+        upper_edge = self._bin_edges[-1]
+
+        if (
+            np.any(values < lower_edge)
+            or np.any(values > upper_edge)
+        ):
+            raise ValueError(
+                "Input chunk contains values outside the configured "
+                "histogram range."
+            )
+
+        chunk_counts, _ = np.histogram(
+            values,
+            bins=self._bin_edges,
+            weights=flattened_weights,
+            density=False
+        )
+
+        # Store float values internally so weighted and unweighted chunks
+        # can both be accumulated safely.
+        self._counts += chunk_counts.astype("float64", copy=False)
+        self._n_observations += values.size
+
+        if flattened_weights is not None:
+            self._has_weights = True
+
+        return self
+
+    def result(
+        self,
+        density: bool | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Return the accumulated histogram and bin edges.
+
+        Parameters
+        ----------
+        density : bool, optional
+            Whether to return probability densities rather than raw counts.
+
+        Returns
+        -------
+        counts_or_density : np.ndarray
+            Raw accumulated bin counts or probability densities.
+        bin_edges : np.ndarray
+            Fixed histogram bin edges.
+
+        Raises
+        ------
+        TypeError
+            If ``density`` is not a boolean or ``None``.
+        ValueError
+            If density is requested before any values have been accumulated.
+            If accumulated weights sum to zero.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(k), where k is the number of bins.
+        Space Complexity:
+            O(k) for returned copies.
+        """
+        if density is None:
+            density = self.density
+
+        if not isinstance(density, bool):
+            raise TypeError("density must be a boolean or None.")
+
+        if not density:
+            return self.counts, self.bin_edges
+        else:
+            total = np.sum(self._counts)
+
+            if total <= 0:
+                raise ValueError(
+                    "Density cannot be calculated because the accumulated "
+                    "histogram weight must be greater than zero."
+                )
+
+            bin_widths = np.diff(self._bin_edges)
+            densities = self._counts / (total * bin_widths)
+            return densities, self.bin_edges
+
+    def reset(self) -> Self:
+        """
+        Clear accumulated histogram counts yet preserved fixed bin edges.
+
+        Returns
+        -------
+        Histogram
+            The reset histogram instance.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(k), where k is the number of bins.
+        Space Complexity:
+            O(k) for the reset count array.
+        """
+        self._counts = np.zeros(
+            len(self._bin_edges) - 1,
+            dtype=float
+        )
+
+        self._n_observations = 0
+        self._has_weights = False
+
+        return self
+
+    @property
+    def counts(self) -> np.ndarray:
+        """
+        Return a copy of the accumulated bin counts.
+
+        Unweighted counts are returned as integers. Weighted counts are
+        returned as floating-point values.
+        """
+        if self._has_weights:
+            return self._counts.copy()
+
+        return self._counts.astype(int)
+
+    @property
+    def bin_edges(self) -> np.ndarray:
+        """
+        Return a copy of the fixed bin edges.
+        """
+        return self._bin_edges.copy()
+
+    @property
+    def count(self) -> int:
+        """
+        Return the number of processed observations.
+        """
+        return self._n_observations

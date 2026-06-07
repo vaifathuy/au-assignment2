@@ -1,4 +1,4 @@
-from numcompute.stats import Statistics, histogram, quantile
+from numcompute.stats import Statistics, histogram, quantile, Histogram
 from numpy.testing import assert_allclose, assert_array_equal, assert_equal
 import pytest
 import numpy as np
@@ -408,3 +408,100 @@ class TestQuantile():
             method="inverted_cdf"
         )
         assert q == 10
+
+
+class TestHistogramStream:
+    def test_explicit_edges_initial_state(self):
+        hist = Histogram(
+            bins=np.array([0, 10, 20, 30])
+        )
+
+        assert_array_equal(
+            hist.bin_edges,
+            np.array([0.0, 10.0, 20.0, 30.0])
+        )
+
+        assert_array_equal(
+            hist.counts,
+            np.array([0, 0, 0])
+        )
+
+        assert_equal(hist.count, 0)
+
+    def test_update_stats_single_chunk(self):
+        hist = Histogram(
+            bins=np.array([0, 10, 20, 30])
+        )
+        hist.update_stats(np.array([2, 7, 15, 25]))
+        assert_array_equal(hist.counts, [2, 1, 1])
+        assert_equal(hist.count, 4)
+
+    def test_update_stats_accumulates_multiple_chunks(self):
+        hist = Histogram(
+            bins=np.array([0, 10, 20, 30])
+        )
+
+        hist.update_stats(np.array([2, 7, 15]))
+        assert_array_equal(hist.counts, [2, 1, 0])
+
+        hist.update_stats(np.array([12, 25]))
+        assert_array_equal(hist.counts, [2, 2, 1])
+
+        assert_equal(hist.count, 5)
+
+    def test_integer_bins_with_range(self):
+        hist = Histogram(bins=3, range=(0, 30))
+
+        hist.update_stats(np.array([2, 7, 15, 12, 25]))
+        assert_array_equal(hist.bin_edges, [0.0, 10.0, 20.0, 30.0])
+        assert_array_equal(hist.counts, [2, 2, 1])
+
+    def test_weighted_chunks(self):
+        hist = Histogram(bins=np.array([0, 10, 20, 30]))
+
+        hist.update_stats(
+            np.array([2, 7, 15]),
+            weights=np.array([0.5, 1.5, 2.0])
+        )
+
+        hist.update_stats(
+            np.array([12, 25]),
+            weights=np.array([1.0, 4.0])
+        )
+
+        assert_allclose(
+            hist.counts,
+            np.array([2.0, 3.0, 4.0])
+        )
+
+    def test_bin_edges_property_returns_copy(self):
+        hist = Histogram(
+            bins=np.array([0, 10, 20, 30])
+        )
+
+        external_edges = hist.bin_edges
+        external_edges[0] = -999
+
+        assert_array_equal(
+            hist.bin_edges,
+            np.array([0.0, 10.0, 20.0, 30.0])
+        )
+
+    def test_rejects_non_numeric_explicit_edges(self):
+        with pytest.raises(TypeError):
+            Histogram(
+                bins=np.array([
+                    "low",
+                    "medium",
+                    "high"
+                ])
+            )
+
+    def test_rejects_invalid_density_result_argument(self):
+        hist = Histogram(bins=np.array([0, 10, 20]))
+        hist.update_stats(np.array([2, 7, 15]))
+        with pytest.raises(
+            TypeError,
+            match="density must be a boolean or None"
+        ):
+            hist.result(density="yes")
