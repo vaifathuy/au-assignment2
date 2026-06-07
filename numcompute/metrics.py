@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Self
 
 
 def _validate_and_flatten(
@@ -576,3 +577,143 @@ def auc(x: np.ndarray, y: np.ndarray) -> float:
 
     # Trapezoidal integration
     return float(np.trapezoid(y, x))
+
+
+# Streaming Support
+class Accuracy:
+    """
+    Incrementally calculate classification accuracy from prediction chunks.
+
+    Accuracy measures the proportion of predictions that match their
+    corresponding true labels:
+
+        accuracy = number of correct predictions / total predictions
+
+    Unlike the standalone ``accuracy()`` function, this class is stateful.
+    It preserves the accumulated number of correct predictions and total
+    observations as new chunks arrive.
+
+    Examples
+    --------
+    >>> metric = Accuracy()
+    >>> metric.update_stats(
+    ...     np.array([1, 0, 1]),
+    ...     np.array([1, 0, 0])
+    ... )
+    >>> metric.update_stats(
+    ...     np.array([0, 1]),
+    ...     np.array([0, 1])
+    ... )
+    >>> metric.result()
+    0.8
+    """
+    def __init__(self):
+        self.reset()
+
+    @property
+    def correct_count(self) -> int:
+        """
+        Return the accumulated number of correct predictions.
+        """
+        return self._correct_count
+
+    @property
+    def count(self) -> int:
+        """
+        Return the accumulated number of processed predictions.
+        """
+        return self._total_count
+
+    def reset(self) -> Self:
+        """
+        Clear all accumulated accuracy statistics.
+
+        Returns
+        -------
+        Accuracy
+            The reset metric instance.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1)
+        Space Complexity:
+            O(1)
+        """
+        self._correct_count = 0
+        self._total_count = 0
+        return self
+
+    def update_stats(self, y_true: np.ndarray, y_pred: np.ndarray) -> Self:
+        """
+        Incrementally update accuracy statistics from a prediction chunk.
+
+        Previously accumulated statistics are preserved. The method counts
+        matching labels in the incoming chunk and adds them to the retained
+        totals.
+
+        Parameters
+        ----------
+        y_true : np.ndarray
+            Ground-truth labels for the incoming chunk. Any shape is accepted
+            because the values are flattened internally.
+        y_pred : np.ndarray
+            Predicted labels for the incoming chunk. Must contain the same
+            number of values as ``y_true``.
+
+        Returns
+        -------
+        Accuracy
+            The updated metric instance.
+
+        Raises
+        ------
+        ValueError
+            If either input is empty.
+            If the flattened arrays have different lengths.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(m), where m is the number of predictions in the incoming chunk.
+        Space Complexity:
+            O(m) for the temporary flattened arrays and comparison result.
+            Retained metric state requires O(1) space.
+        """
+        y_true, y_pred = _validate_and_flatten(
+            y_true,
+            y_pred
+        )
+
+        correcte_preds = np.sum(y_true == y_pred)
+        self._correct_count += int(correcte_preds)
+        self._total_count += y_true.size
+        return self
+
+    def result(self) -> float:
+        """
+        Return the accumulated accuracy score.
+
+        Returns
+        -------
+        float
+            Accuracy score in the range [0, 1].
+
+        Raises
+        ------
+        ValueError
+            If no prediction chunks have been processed.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1)
+        Space Complexity:
+            O(1)
+        """
+        if self._total_count == 0:
+            raise ValueError(
+                "No predictions have been accumulated yet."
+            )
+
+        return self._correct_count / self._total_count

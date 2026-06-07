@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 from numcompute.metrics import (
+    Accuracy,
     accuracy,
     precision,
     recall,
@@ -88,6 +89,76 @@ class TestAccuracy:
             np.array([[1], [0], [1]]),
             np.array([1, 0])
         )
+
+
+class TestAccuracyStream:
+    def test_update_stats_single_chunk(self):
+        metric = Accuracy()
+        metric.update_stats(
+            np.array([1, 0, 1, 1]),
+            np.array([1, 0, 0, 1])
+        )
+        npt.assert_equal(metric.correct_count, 3)
+        npt.assert_equal(metric.count, 4)
+        npt.assert_allclose(
+            metric.result(),
+            0.75
+        )
+
+    def test_update_stats_accumulates_multiple_chunks(self):
+        metric = Accuracy()
+        metric.update_stats(
+            np.array([1, 0, 1]),
+            np.array([1, 0, 0])
+        )
+        npt.assert_equal(metric.correct_count, 2)
+        npt.assert_equal(metric.count, 3)
+
+        metric.update_stats(
+            np.array([0, 1]),
+            np.array([0, 1])
+        )
+        npt.assert_equal(metric.correct_count, 4)
+        npt.assert_equal(metric.count, 5)
+
+        npt.assert_allclose(
+            metric.result(),
+            0.8
+        )
+
+    def test_supports_2d_inputs(self):
+        metric = Accuracy()
+        metric.update_stats(
+            np.array([
+                [1],
+                [0],
+                [1]
+            ]),
+            np.array([
+                [1],
+                [0],
+                [0]
+            ])
+        )
+        npt.assert_equal(metric.correct_count, 2)
+        npt.assert_equal(metric.count, 3)
+        npt.assert_allclose(
+            metric.result(),
+            0.6666666667
+        )
+
+    def test_reset_clears_accumulated_statistics(self):
+        metric = Accuracy()
+
+        metric.update_stats(
+            np.array([1, 0, 1]),
+            np.array([1, 0, 0])
+        )
+
+        metric.reset()
+
+        npt.assert_equal(metric.correct_count, 0)
+        npt.assert_equal(metric.count, 0)
 
 
 class TestPrecisionBinary:
