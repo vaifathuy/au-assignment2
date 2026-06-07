@@ -584,14 +584,8 @@ class Accuracy:
     """
     Incrementally calculate classification accuracy from prediction chunks.
 
-    Accuracy measures the proportion of predictions that match their
-    corresponding true labels:
-
-        accuracy = number of correct predictions / total predictions
-
-    Unlike the standalone ``accuracy()`` function, this class is stateful.
-    It preserves the accumulated number of correct predictions and total
-    observations as new chunks arrive.
+    It measures the proportion of predictions that match their
+    corresponding true labels.
 
     Examples
     --------
@@ -717,3 +711,156 @@ class Accuracy:
             )
 
         return self._correct_count / self._total_count
+
+
+class MSE:
+    """
+    Incrementally calculate mean squared error from prediction chunks.
+
+    It measures the average squared difference between
+    predicted and true values:
+
+        MSE = sum((y_true - y_pred) ** 2) / number of observations
+
+    Examples
+    --------
+    >>> metric = MSE()
+    >>> metric.update_stats(
+    ...     np.array([1, 2, 3]),
+    ...     np.array([1, 4, 2])
+    ... )
+    >>> metric.result()
+    1.6666666666666667
+    """
+
+    def __init__(self):
+        self.reset()
+
+    @property
+    def squared_error_sum(self) -> float:
+        """
+        Return the accumulated sum of squared errors.
+        """
+        return self._squared_error_sum
+
+    @property
+    def count(self) -> int:
+        """
+        Return the total number of processed values.
+        """
+        return self._count
+
+    def update_stats(
+        self,
+        y_true: np.ndarray,
+        y_pred: np.ndarray
+    ) -> "MSE":
+        """
+        Incrementally update the accumulated squared error.
+
+        Parameters
+        ----------
+        y_true : np.ndarray
+            Ground-truth numeric values for the incoming chunk.
+        y_pred : np.ndarray
+            Predicted numeric values for the incoming chunk. Must have the
+            same shape as ``y_true``.
+
+        Returns
+        -------
+        MSE
+            The updated metric instance.
+
+        Raises
+        ------
+        ValueError
+            If the input arrays have different shapes.
+            If either input array is empty.
+        TypeError
+            If subtraction cannot be performed because values are not numeric.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(m), where m is the number of values in the incoming chunk.
+        Space Complexity:
+            O(m) for the temporary squared-error array.
+            Retained metric state requires O(1) space.
+        """
+        y_true = np.asarray(y_true)
+        y_pred = np.asarray(y_pred)
+
+        if y_true.shape != y_pred.shape:
+            raise ValueError(
+                f"Shape mismatch: y_true {y_true.shape} "
+                f"!= y_pred {y_pred.shape}"
+            )
+
+        if y_true.size == 0:
+            raise ValueError(
+                "Input arrays must not be empty."
+            )
+
+        try:
+            squared_errors = (y_true - y_pred) ** 2
+        except TypeError as exc:
+            raise TypeError(
+                "Input arrays must contain numeric values."
+            ) from exc
+
+        self._squared_error_sum += float(
+            np.sum(squared_errors)
+        )
+
+        self._count += y_true.size
+
+        return self
+
+    def result(self) -> float:
+        """
+        Return the accumulated mean squared error.
+
+        Returns
+        -------
+        float
+            Mean squared error across all processed chunks.
+
+        Raises
+        ------
+        ValueError
+            If no prediction chunks have been processed.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1).
+        """
+        if self._count == 0:
+            raise ValueError(
+                "No predictions have been accumulated yet."
+            )
+
+        return self._squared_error_sum / self._count
+
+    def reset(self) -> "MSE":
+        """
+        Clear all accumulated squared-error statistics.
+
+        Returns
+        -------
+        MSE
+            The reset metric instance.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1).
+        """
+        self._squared_error_sum = 0.0
+        self._count = 0
+
+        return self

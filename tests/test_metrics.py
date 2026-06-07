@@ -1,13 +1,14 @@
 import numpy as np
 import numpy.testing as npt
 from numcompute.metrics import (
-    Accuracy,
     accuracy,
+    Accuracy,
     precision,
     recall,
     f1,
     confusion_matrix,
     mse,
+    MSE,
     auc,
     roc_curve
 )
@@ -89,76 +90,6 @@ class TestAccuracy:
             np.array([[1], [0], [1]]),
             np.array([1, 0])
         )
-
-
-class TestAccuracyStream:
-    def test_update_stats_single_chunk(self):
-        metric = Accuracy()
-        metric.update_stats(
-            np.array([1, 0, 1, 1]),
-            np.array([1, 0, 0, 1])
-        )
-        npt.assert_equal(metric.correct_count, 3)
-        npt.assert_equal(metric.count, 4)
-        npt.assert_allclose(
-            metric.result(),
-            0.75
-        )
-
-    def test_update_stats_accumulates_multiple_chunks(self):
-        metric = Accuracy()
-        metric.update_stats(
-            np.array([1, 0, 1]),
-            np.array([1, 0, 0])
-        )
-        npt.assert_equal(metric.correct_count, 2)
-        npt.assert_equal(metric.count, 3)
-
-        metric.update_stats(
-            np.array([0, 1]),
-            np.array([0, 1])
-        )
-        npt.assert_equal(metric.correct_count, 4)
-        npt.assert_equal(metric.count, 5)
-
-        npt.assert_allclose(
-            metric.result(),
-            0.8
-        )
-
-    def test_supports_2d_inputs(self):
-        metric = Accuracy()
-        metric.update_stats(
-            np.array([
-                [1],
-                [0],
-                [1]
-            ]),
-            np.array([
-                [1],
-                [0],
-                [0]
-            ])
-        )
-        npt.assert_equal(metric.correct_count, 2)
-        npt.assert_equal(metric.count, 3)
-        npt.assert_allclose(
-            metric.result(),
-            0.6666666667
-        )
-
-    def test_reset_clears_accumulated_statistics(self):
-        metric = Accuracy()
-
-        metric.update_stats(
-            np.array([1, 0, 1]),
-            np.array([1, 0, 0])
-        )
-
-        metric.reset()
-
-        npt.assert_equal(metric.correct_count, 0)
-        npt.assert_equal(metric.count, 0)
 
 
 class TestPrecisionBinary:
@@ -820,4 +751,201 @@ class TestAUC:
             auc,
             np.array([0, 1]),
             np.array([0])
+        )
+
+
+# Metric Streaming
+class TestAccuracyStream:
+    def test_update_stats_single_chunk(self):
+        metric = Accuracy()
+        metric.update_stats(
+            np.array([1, 0, 1, 1]),
+            np.array([1, 0, 0, 1])
+        )
+        npt.assert_equal(metric.correct_count, 3)
+        npt.assert_equal(metric.count, 4)
+        npt.assert_allclose(
+            metric.result(),
+            0.75
+        )
+
+    def test_update_stats_accumulates_multiple_chunks(self):
+        metric = Accuracy()
+        metric.update_stats(
+            np.array([1, 0, 1]),
+            np.array([1, 0, 0])
+        )
+        npt.assert_equal(metric.correct_count, 2)
+        npt.assert_equal(metric.count, 3)
+
+        metric.update_stats(
+            np.array([0, 1]),
+            np.array([0, 1])
+        )
+        npt.assert_equal(metric.correct_count, 4)
+        npt.assert_equal(metric.count, 5)
+
+        npt.assert_allclose(
+            metric.result(),
+            0.8
+        )
+
+    def test_supports_2d_inputs(self):
+        metric = Accuracy()
+        metric.update_stats(
+            np.array([
+                [1],
+                [0],
+                [1]
+            ]),
+            np.array([
+                [1],
+                [0],
+                [0]
+            ])
+        )
+        npt.assert_equal(metric.correct_count, 2)
+        npt.assert_equal(metric.count, 3)
+        npt.assert_allclose(
+            metric.result(),
+            0.6666666667
+        )
+
+    def test_reset_clears_accumulated_statistics(self):
+        metric = Accuracy()
+
+        metric.update_stats(
+            np.array([1, 0, 1]),
+            np.array([1, 0, 0])
+        )
+
+        metric.reset()
+
+        npt.assert_equal(metric.correct_count, 0)
+        npt.assert_equal(metric.count, 0)
+
+
+class TestMSEStream:
+    def test_update_stats_single_chunk(self):
+        metric = MSE()
+        metric.update_stats(
+            np.array([1, 2, 3]),
+            np.array([1, 4, 2])
+        )
+        npt.assert_allclose(metric.squared_error_sum, 5.0)
+        npt.assert_equal(metric.count, 3)
+        npt.assert_allclose(metric.result(), 5 / 3)
+
+    def test_update_stats_accumulates_multiple_chunks(self):
+        metric = MSE()
+        metric.update_stats(
+            np.array([1, 2, 3]),
+            np.array([1, 4, 2])
+        )
+        metric.update_stats(
+            np.array([4, 5]),
+            np.array([2, 5])
+        )
+        npt.assert_allclose(metric.squared_error_sum, 9.0)
+        npt.assert_equal(metric.count, 5)
+        npt.assert_allclose(metric.result(), 1.8)
+
+    def test_supports_multidimensional_arrays(self):
+        metric = MSE()
+        metric.update_stats(
+            np.array([[1, 2], [3, 4]]),
+            np.array([[1, 4], [2, 4]])
+        )
+        npt.assert_allclose(metric.squared_error_sum, 5.0)
+        npt.assert_equal(metric.count, 4)
+        npt.assert_allclose(metric.result(), 1.25)
+
+    def test_supports_float_values(self):
+        metric = MSE()
+        metric.update_stats(
+            np.array([1.5, 2.5, 3.5]),
+            np.array([1.0, 2.0, 4.0])
+        )
+        npt.assert_allclose(metric.squared_error_sum, 0.75)
+        npt.assert_equal(metric.count, 3)
+        npt.assert_allclose(metric.result(), 0.25)
+
+    def test_reset_clears_accumulated_statistics(self):
+        metric = MSE()
+        metric.update_stats(
+            np.array([1, 2, 3]),
+            np.array([1, 4, 2])
+        )
+        metric.reset()
+        npt.assert_allclose(metric.squared_error_sum, 0.0)
+        npt.assert_equal(metric.count, 0)
+
+    def test_result_raises_before_predictions_arrive(self):
+        metric = MSE()
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
+        )
+
+    def test_update_stats_rejects_empty_arrays(self):
+        metric = MSE()
+        npt.assert_raises_regex(
+            ValueError,
+            r"Input arrays must not be empty\.",
+            metric.update_stats,
+            np.array([]),
+            np.array([])
+        )
+
+    def test_update_stats_rejects_shape_mismatch(self):
+        metric = MSE()
+        npt.assert_raises_regex(
+            ValueError,
+            r"Shape mismatch",
+            metric.update_stats,
+            np.array([
+                1,
+                2,
+                3
+            ]),
+            np.array([
+                1,
+                2
+            ])
+        )
+
+    def test_update_stats_rejects_different_multidimensional_shapes(self):
+        metric = MSE()
+
+        npt.assert_raises_regex(
+            ValueError, r"Shape mismatch",
+            metric.update_stats,
+            np.array([
+                [1, 2],
+                [3, 4]
+            ]),
+            np.array([
+                1,
+                2,
+                3,
+                4
+            ])
+        )
+
+    def test_update_stats_rejects_non_numeric_values(self):
+        metric = MSE()
+
+        npt.assert_raises_regex(
+            TypeError,
+            r"Input arrays must contain numeric values\.",
+            metric.update_stats,
+            np.array([
+                "one",
+                "two"
+            ]),
+            np.array([
+                "three",
+                "four"
+            ])
         )
