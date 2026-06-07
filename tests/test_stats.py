@@ -1,4 +1,5 @@
 from numcompute.stats import Statistics, histogram, quantile
+from numpy.testing import assert_allclose, assert_array_equal, assert_equal
 import pytest
 import numpy as np
 
@@ -14,7 +15,7 @@ class TestStatistics:
         stat.add(2)
         stat.add(7)
         assert np.isclose(np.array([stat.std_dev()]),
-                          np.array([1.0614455552060436]))
+                          np.array([6.841458583924598]))
 
     def test_mean(self):
         stat = Statistics()
@@ -86,6 +87,131 @@ class TestStatistics:
             stat.add(2)
             stat.add(6)
             stat.add("12")
+
+
+class TestStatisticsStreaming:
+    def test_update_stats_single_chunk(self):
+        stat = Statistics()
+
+        X = np.array([
+            [2, 10],
+            [6, 20],
+            [10, 30]
+        ])
+
+        stat.update_stats(X)
+        assert_equal(stat.count, 3)
+
+        assert_allclose(
+            stat.mean,
+            np.array([6.0, 20.0])
+        )
+
+        assert_allclose(
+            stat._M2,
+            np.array([32.0, 200.0])
+        )
+
+        assert_array_equal(
+            stat.min,
+            np.array([2.0, 10.0])
+        )
+
+        assert_array_equal(
+            stat.max,
+            np.array([10.0, 30.0])
+        )
+
+    def test_update_stats_multiple_chunks(self):
+        stat = Statistics()
+        X_1 = np.array([
+            [2, 10],
+            [6, 20]
+        ])
+        X_2 = np.array([
+            [10, 30]
+        ])
+        stat.update_stats(X_1)
+        stat.update_stats(X_2)
+
+        assert stat.count == 3
+
+        assert_allclose(
+            stat.mean,
+            np.array([6.0, 20.0])
+        )
+
+        assert_allclose(
+            stat._M2,
+            np.array([32.0, 200.0])
+        )
+
+        assert_array_equal(
+            stat.min,
+            np.array([2.0, 10.0])
+        )
+
+        assert_array_equal(
+            stat.max,
+            np.array([10.0, 30.0])
+        )
+
+    def test_population_variance(self):
+        stat = Statistics()
+
+        stat.update_stats(np.array([
+            [2, 10],
+            [6, 20],
+            [10, 30]
+        ]))
+
+        assert_allclose(
+            stat.variance(ddof=0),
+            np.array([10.6666666667, 66.6666666667])
+        )
+
+    def test_sample_variance(self):
+        stat = Statistics()
+
+        stat.update_stats(np.array([
+            [2, 10],
+            [6, 20],
+            [10, 30]
+        ]))
+
+        assert_allclose(
+            stat.variance(ddof=1),
+            np.array([16.0, 100.0])
+        )
+
+    def test_population_standard_deviation(self):
+        stat = Statistics()
+
+        X = np.array([
+            [2, 10],
+            [6, 20],
+            [10, 30]
+        ])
+
+        stat.update_stats(X)
+
+        assert_allclose(
+            stat.std_dev(ddof=0),
+            np.std(X, axis=0, ddof=0)
+        )
+
+    def test_sample_standard_deviation(self):
+        stat = Statistics()
+        X = np.array([
+            [2, 10],
+            [6, 20],
+            [10, 30]
+        ])
+        stat.update_stats(X)
+        assert_allclose(
+            stat.std_dev(ddof=1),
+            np.std(X, axis=0, ddof=1)
+        )
 
 
 class TestHistogram:

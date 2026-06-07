@@ -1,82 +1,33 @@
 import numpy as np
+from typing import Self
 from numcompute.utils import validate_numeric_array
-
-"""
-The Statistics class helps find common statistics like mean, median, min, max
-and standard deviation. It uses Welford Algorithm which helps calculate mean,
-min, max and standard deviation in one pass. Traditional code required two
-passes for finding standard deviation, one for finding the mean, second for
-finding the difference between the individual points and the mean. After this
-we finally divide this value by length of the dataset to find the variance.
-Then we take the square root to find the standard deviation. Here is the
-sample code:
-
-data = [2,3,4]
-mean = 0
-#add all the data points
-for i in data:
-    mean += i
-#divide by total data points
-mean = mean / len(data)
-
-meanDifSum = 0
-for i in data:
-    meanDifSum += pow((i - mean),2)
-#find the variance
-var = meanDifSum / len(data) #population variance
-sd = pow(var, 0.5)
-
-The disadvantage of the above code is that it requires 2 passes (2 for loops)
-which is expensive. Moreover, we also store the mean in memory which can be
-very large for large datasets and is only required in a small part in the
-formula. We're also storing the whole dataset in memory which is expensive.
-
-To overcome this, we use Welford's algorithm. This algo is used when we've a
-large dataset and we want to calculate "running sd". The above code required
-2 passes, here we calculate it with a single pass. The sd is calculated as
-we're traversing the large dataset. It looks like this:
-
-n++; //our index
-delta = value - mean
-mean = mean + delta / n
-delta2 = value - mean
-total_dev = delta * delta2
-
-After running through the data, we find the variance and then the sd:
-
-variance = total_dev / (n - 1)
-sd = pow(variance, 0.5)
-
-Advantage: Earlier we had to run 2 for loops (O(N)). Now it is O(1) inside
-the main loop.
-
-Finding mean, median, min, max: mean is already found out. min and max can
-be calculated inside the for loop by doing cur_min=min(cur_min, val) and
-cur_max=max(cur_max, val). For calculating the median, we use numpy.median().
-
->>> stat = Statistics()
-        stat.add(5)
-        stat.add(8)
-        stat.add(3)
-        stat.add(5)
-        stat.add(2)
-        stat.add(6)
->>> stat.std_dev()
->>> stat.mean
->>> stat.min
->>> stat.max
-"""
 
 
 class Statistics:
     def __init__(self):
-        self._count = 0
-        self._mean = 0
-        self._total_dev = 0
-        self._min = float('inf')
-        self._max = float('-inf')
+        self.reset()
 
-    def add(self, x : int | float):
+    @property
+    def mean(self):
+        return self._mean
+
+    @property
+    def min(self):
+        return self._min
+
+    @property
+    def max(self):
+        return self._max
+
+    @property
+    def count(self):
+        return self._count
+
+    @property
+    def M2(self):
+        return self._M2
+
+    def add(self, x : int | float) -> Self:
         """
         Update all running statistics with a new observed value.
 
@@ -91,44 +42,24 @@ class Statistics:
         Raises
         ------
         ValueError
-            If ``x`` is ``None`` or not an ``int`` or ``float``.
+            If ``x`` is ``None``.
+        TypeError
+            If ``x`` is not numeric.
 
         Complexity
         ----------
-        Time Complexity: O(1)
-        Space Complexity: O(1)
+        Time Complexity:
+            O(1)
+        Space Complexity:
+            O(1)
         """
-        if x is None or not isinstance(x, (int, float)):
-            raise ValueError("Please pass an integer or float value")
-        self._count += 1
+        if x is None:
+            raise ValueError("Please pass a numeric value.")
 
-        self._min = min(self._min, x)
-        self._max = max(self._max, x)
+        if not isinstance(x, (int, float, np.number)):
+            raise TypeError("Please pass an integer or float value.")
 
-        delta1 = x - self._mean
-
-        self._mean = self._mean + delta1 / self._count
-
-        delta2 = x - self._mean
-
-        self._total_dev = delta1 * delta2
-
-    def std_dev(self) -> float:
-        """
-        Compute the sample standard deviation from the accumulated data.
-
-        Returns
-        -------
-        float
-            Sample standard deviation (ddof=1).
-
-        Complexity
-        ----------
-        Time Complexity: O(1)
-        Space Complexity: O(1)
-        """
-        var = self._total_dev / (self._count - 1)
-        return pow(var, 0.5)
+        return self.update_stats(np.array([[x]], dtype=float))
 
     def median(
         self,
@@ -177,21 +108,184 @@ class Statistics:
         return np.median(data, axis=axis,
                          overwrite_input=overwrite_input, keepdims=keepdims)
 
-    @property
-    def mean(self):
-        return self._mean
+    def reset(self) -> Self:
+        """
+        Clear all accumulated running statistics.
 
-    @property
-    def min(self):
-        return self._min
+        Returns
+        -------
+        Statistics
+            The reset statistics instance.
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1).
+        """
+        self._count = 0
+        self._mean = None
+        self._M2 = None
+        self._min = None
+        self._max = None
 
-    @property
-    def max(self):
-        return self._max
+        return self
 
-    @property
-    def count(self):
-        return self._count
+    def update_stats(self, X_chunk: np.ndarray) -> Self:
+        """
+        Incrementally update running statistics from a newly received chunk.
+
+        Uses Welford's online algorithm to update the per-feature running mean
+        and accumulated squared deviation without storing previously processed
+        chunks. Per-feature minimum and maximum values are updated alongside
+        the running statistics.
+
+        Parameters
+        ----------
+        X_chunk : np.ndarray
+            Incoming numeric data of shape (m, n), where m is the number of
+            rows in the chunk and n is the number of features.
+
+        Returns
+        -------
+        Statistics
+            The updated statistics instance.
+
+        Raises
+        ------
+        ValueError
+            If ``X_chunk`` is not 2D.
+            If ``X_chunk`` contains no rows.
+            If ``X_chunk`` has a different number of features than previously
+            processed chunks.
+            If ``X_chunk`` contains ``None``, NaN, infinite, or complex values.
+        TypeError
+            If ``X_chunk`` is not a numeric array.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(m * n), where m is the number of rows and n is the number of
+            features.
+        Space Complexity:
+            O(m * n) in the worst case for converting the incoming chunk to
+            float64. The retained running state requires O(n) space.
+        """
+        X_chunk = np.asarray(X_chunk)
+
+        if X_chunk.ndim != 2:
+            raise ValueError(
+                "X_chunk must have 2 dimensions. Reshape your array first."
+            )
+
+        if X_chunk.shape[0] == 0:
+            raise ValueError("X_chunk must contain at least one row.")
+
+        validate_numeric_array(X_chunk)
+
+        # Working with decimal value is more appropriate -> casting is required
+        X_chunk = X_chunk.astype("float64", copy=False)
+
+        n_features = X_chunk.shape[1]
+
+        if self._mean is None:
+            self._mean = np.zeros(n_features, dtype=float)
+            self._M2 = np.zeros(n_features, dtype=float)
+            self._min = np.full(n_features, np.inf, dtype=float)
+            self._max = np.full(n_features, -np.inf, dtype=float)
+        elif n_features != len(self._mean):
+            raise ValueError(
+                "Input chunk has a different number of features than "
+                "previously processed chunks."
+            )
+
+        for row in X_chunk:
+            self._count += 1
+            self._min = np.minimum(self._min, row)
+            self._max = np.maximum(self._max, row)
+
+            delta_1 = row - self._mean
+            self._mean += delta_1 / self._count
+            delta_2 = row - self._mean
+
+            self._M2 += delta_1 * delta_2
+
+        return self
+
+    def variance(self, ddof: int = 0) -> np.ndarray:
+        """
+        Return the per-feature variance from the accumulated statistics.
+
+        Parameters
+        ----------
+        ddof : int, optional
+            Delta degrees of freedom. Use ``0`` for population variance and
+            ``1`` for sample variance. Default is 0.
+
+        Returns
+        -------
+        np.ndarray
+            Per-feature variance values.
+
+        Raises
+        ------
+        ValueError
+            If no values have been accumulated.
+            If ``ddof`` is negative.
+            If ``count - ddof`` is not greater than zero.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(n), where n is the number of features.
+        Space Complexity:
+            O(n) for the returned array.
+        """
+        if self._count == 0 or self._M2 is None:
+            raise ValueError("No statistics have been accumulated yet.")
+
+        if ddof < 0:
+            raise ValueError("`ddof` must be non-negative.")
+
+        denominator = self._count - ddof
+
+        if denominator <= 0 :
+            raise ValueError(
+                "Variance cannot be calculated because `count - ddof` "
+                "must be greater than zero."
+            )
+
+        return self._M2 / denominator
+
+    def std_dev(self, ddof: int = 0) -> np.ndarray:
+        """
+        Return the per-feature standard deviation.
+
+        Parameters
+        ----------
+        ddof : int, optional
+            Delta degrees of freedom passed to ``variance()``.
+            Use ``0`` for population standard deviation and ``1`` for sample
+            standard deviation. Default is 0.
+
+        Returns
+        -------
+        np.ndarray
+            Per-feature standard deviation values.
+
+        Raises
+        ------
+        ValueError
+            If variance cannot be calculated for the requested ``ddof``.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(n), where n is the number of features.
+        Space Complexity:
+            O(n) for the returned array.
+        """
+        return np.sqrt(self.variance(ddof=ddof))
 
 
 def histogram(
