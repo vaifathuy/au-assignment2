@@ -25,8 +25,11 @@ from .sort_search import (
 )
 
 from .stats import (
+    Statistics,
+    Histogram,
+    Quantile,
     histogram,
-    quantile
+    quantile,
 )
 
 __all__ = [
@@ -62,6 +65,9 @@ __all__ = [
     "utils",
     "histogram",
     "quantile",
+    "Statistics",
+    "Histogram",
+    "Quantile",
     "auc",
     "roc_curve"
 ]
