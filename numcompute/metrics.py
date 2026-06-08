@@ -1703,3 +1703,266 @@ class F1:
         self._confusion_matrix.reset()
 
         return self
+
+
+class ROCAUC:
+    """
+    Incrementally retain labels and prediction scores for exact ROC-AUC
+    calculation.
+
+    Examples
+    --------
+    >>> metric = ROCAUC()
+    >>> metric.update_stats(
+    ...     np.array([0, 1]),
+    ...     np.array([0.10, 0.90])
+    ... )
+    >>> metric.update_stats(
+    ...     np.array([1, 0]),
+    ...     np.array([0.60, 0.40])
+    ... )
+    >>> metric.result()
+    1.0
+    """
+
+    def __init__(
+        self,
+        pos_label=1
+    ):
+        """
+        Initialize an empty streaming ROC-AUC tracker.
+
+        Parameters
+        ----------
+        pos_label : optional
+            Label treated as the positive class. Default is 1.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1) before prediction chunks are processed.
+        """
+        self.pos_label = pos_label
+        self.reset()
+
+    @property
+    def count(self) -> int:
+        """
+        Return the total number of retained observations.
+        """
+        return self._count
+
+    @property
+    def y_true(self) -> np.ndarray:
+        """
+        Return a copy of all retained ground-truth labels.
+
+        Returns
+        -------
+        np.ndarray
+            Flattened array containing all retained labels.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(n), where n is the total number of retained observations.
+        Space Complexity:
+            O(n) for the returned array.
+        """
+        if self._count == 0:
+            return np.array([])
+
+        return np.concatenate(
+            self._y_true_chunks
+        ).copy()
+
+    @property
+    def y_scores(self) -> np.ndarray:
+        """
+        Return a copy of all retained prediction scores.
+
+        Returns
+        -------
+        np.ndarray
+            Flattened array containing all retained scores.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(n), where n is the total number of retained observations.
+        Space Complexity:
+            O(n) for the returned array.
+        """
+        if self._count == 0:
+            return np.array(
+                [],
+                dtype=float
+            )
+
+        return np.concatenate(
+            self._y_score_chunks
+        ).copy()
+
+    def update_stats(
+        self,
+        y_true: np.ndarray,
+        y_scores: np.ndarray
+    ) -> Self:
+        """
+        Incrementally retain labels and prediction scores from a new chunk.
+
+        Previously received chunks are preserved. Input arrays are flattened
+        internally and copied so later changes to the caller's arrays cannot
+        modify the retained state.
+
+        A chunk may contain only one class. Both positive and negative classes
+        are required only when ``roc_curve()`` or ``result()`` is called.
+
+        Parameters
+        ----------
+        y_true : np.ndarray
+            Ground-truth binary labels for the incoming chunk.
+        y_scores : np.ndarray
+            Continuous prediction scores or probabilities for the incoming
+            chunk. Must contain the same number of values as ``y_true``.
+
+        Returns
+        -------
+        ROCAUC
+            The updated instance.
+
+        Raises
+        ------
+        ValueError
+            If either array is empty.
+            If the flattened arrays have different lengths.
+            If ``y_scores`` contains NaN or infinite values.
+        TypeError
+            If ``y_scores`` cannot be converted to numeric values.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(m), where m is the number of values in the incoming chunk.
+        Space Complexity:
+            O(m) additional retained memory for the incoming chunk.
+            Total retained memory becomes O(n), where n is the total number
+            of observations received so far.
+        """
+        y_true, y_scores = _validate_and_flatten(y_true, y_scores)
+
+        try:
+            y_scores = y_scores.astype("float64")
+        except (TypeError, ValueError) as exc:
+            raise TypeError(
+                "y_scores must contain numeric values."
+            ) from exc
+
+        if (
+            np.isnan(y_scores).any()
+            or np.isinf(y_scores).any()
+        ):
+            raise ValueError(
+                "y_scores must not contain NaN or infinite values."
+            )
+
+        self._y_true_chunks.append(y_true.copy())
+        self._y_score_chunks.append(y_scores.copy())
+        self._count += y_true.size
+
+        return self
+
+    def roc_curve(
+        self
+    ) -> tuple[
+        np.ndarray,
+        np.ndarray,
+        np.ndarray
+    ]:
+        """
+        Calculate the exact ROC curve from all retained observations.
+
+        Returns
+        -------
+        fpr : np.ndarray
+            False-positive rates at each threshold.
+        tpr : np.ndarray
+            True-positive rates at each threshold.
+        thresholds : np.ndarray
+            Score thresholds used to calculate the ROC points.
+
+        Raises
+        ------
+        ValueError
+            If no observations have been accumulated.
+            If more than two classes are present.
+            If the retained labels do not include both positive and negative
+            observations.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(n log n), dominated by sorting prediction scores.
+        Space Complexity:
+            O(n) for the combined arrays and ROC calculations.
+        """
+        if self._count == 0:
+            raise ValueError(
+                "No predictions have been accumulated yet."
+            )
+
+        return roc_curve(
+            self.y_true,
+            self.y_scores,
+            pos_label=self.pos_label
+        )
+
+    def result(self) -> float:
+        """
+        Return the exact accumulated ROC-AUC score.
+
+        Returns
+        -------
+        float
+            Area under the ROC curve.
+
+        Raises
+        ------
+        ValueError
+            If the ROC curve cannot be calculated from the retained
+            observations.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(n log n), dominated by ROC-curve calculation.
+        Space Complexity:
+            O(n) for the combined arrays and ROC calculations.
+        """
+        fpr, tpr, _ = self.roc_curve()
+
+        return auc(fpr, tpr)
+
+    def reset(self) -> Self:
+        """
+        Clear all retained labels and prediction scores.
+
+        Returns
+        -------
+        ROCAUC
+            The reset instance.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1) after previously retained chunks are released.
+        """
+        self._y_true_chunks = []
+        self._y_score_chunks = []
+        self._count = 0
+
+        return self

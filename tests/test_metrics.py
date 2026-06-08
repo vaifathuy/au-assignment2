@@ -14,7 +14,8 @@ from numcompute.metrics import (
     mse,
     MSE,
     auc,
-    roc_curve
+    roc_curve,
+    ROCAUC
 )
 
 
@@ -1299,6 +1300,51 @@ class TestF1Stream:
         metric.update_stats(
             np.array([1, 0]),
             np.array([1, 1])
+        )
+        metric.reset()
+        npt.assert_equal(metric.count, 0)
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
+        )
+
+
+class TestROCAUCStream:
+
+    def test_auc_accumulates_multiple_chunks(self):
+        metric = ROCAUC()
+        metric.update_stats(
+            np.array([0, 0]),
+            np.array([0.10, 0.30])
+        )
+        metric.update_stats(
+            np.array([1, 1]),
+            np.array([0.70, 0.90])
+        )
+        npt.assert_equal(metric.count, 4)
+        npt.assert_allclose(metric.result(), 1.0)
+
+    def test_result_requires_both_classes(self):
+        metric = ROCAUC()
+
+        metric.update_stats(
+            np.array([1, 1, 1]),
+            np.array([0.60, 0.80, 0.90])
+        )
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"y_true must contain both classes\.",
+            metric.result
+        )
+
+    def test_reset_clears_statistics(self):
+        metric = ROCAUC()
+        metric.update_stats(
+            np.array([0, 1]),
+            np.array([0.10, 0.90])
         )
         metric.reset()
         npt.assert_equal(metric.count, 0)
