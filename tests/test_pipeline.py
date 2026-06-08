@@ -8,7 +8,7 @@ from numcompute.preprocessing import (
 import pytest
 
 import numpy as np
-from numpy.testing import assert_array_equal, assert_raises_regex
+from numpy.testing import assert_array_equal, assert_raises_regex, assert_equal
 
 
 class MockModel:
@@ -350,3 +350,116 @@ class TestFeatureUnion:
         assert result.shape == (3, 4)
 
         assert not np.isnan(result).any()
+
+
+# Streaming
+class MockStreamingTransformer:
+    """
+    A mock incremental transformer.
+
+    It records the chunks received by partial_fit() and adds a fixed value
+    during transform().
+    """
+
+    def __init__(self, add_value):
+        self.add_value = add_value
+        self.partial_fit_calls = 0
+        self.transform_calls = 0
+        self.received_chunks = []
+
+    def partial_fit(self, X, y=None):
+        self.partial_fit_calls += 1
+        self.received_chunks.append(np.asarray(X).copy())
+        return self
+
+    def transform(self, X):
+        self.transform_calls += 1
+        return X + self.add_value
+
+
+class MockStreamingModel:
+    """
+    A mock incremental model.
+
+    It records the transformed feature chunks and target chunks received
+    during partial_fit().
+    """
+
+    def __init__(self):
+        self.partial_fit_calls = 0
+        self.received_X_chunks = []
+        self.received_y_chunks = []
+
+    def partial_fit(self, X, y=None):
+        self.partial_fit_calls += 1
+        self.received_X_chunks.append(np.asarray(X).copy())
+
+        if y is None:
+            self.received_y_chunks.append(None)
+        else:
+            self.received_y_chunks.append(np.asarray(y).copy())
+
+        return self
+
+    def predict(self, X):
+        return np.zeros(len(X), dtype=int)
+
+
+class TestPipelineStream:
+
+    def test_partial_fit_passes_transformed_data_to_next_step(self):
+        transformer_1 = MockStreamingTransformer(add_value=1)
+        transformer_2 = MockStreamingTransformer(add_value=10)
+        model = MockStreamingModel()
+
+        pipeline = Pipeline([
+            ("transformer_1", transformer_1),
+            ("transformer_2", transformer_2),
+            ("model", model)
+        ])
+
+        X = np.array([
+            [1],
+            [2],
+            [3]
+        ])
+
+        y = np.array([0, 1, 0])
+
+        result = pipeline.partial_fit(X, y)
+
+        assert_equal(result, pipeline)
+        assert_array_equal(transformer_1.received_chunks[0], X)
+        assert_array_equal(transformer_2.received_chunks[0], X + 1)
+        assert_array_equal(model.received_X_chunks[0], X + 11)
+        assert_array_equal(model.received_y_chunks[0], y)
+
+    def test_partial_fit_accumulates_multiple_chunks(self):
+        transformer = MockStreamingTransformer(add_value=5)
+        model = MockStreamingModel()
+        pipeline = Pipeline([
+            ("transformer", transformer),
+            ("model", model)
+        ])
+
+        X_1 = np.array([[1], [2]])
+        y_1 = np.array([0, 1])
+        X_2 = np.array([[3], [4]])
+        y_2 = np.array([1, 0])
+        pipeline.partial_fit(X_1, y_1)
+        pipeline.partial_fit(X_2, y_2)
+        assert_equal(transformer.partial_fit_calls, 2)
+        assert_equal(model.partial_fit_calls, 2)
+        assert_array_equal(model.received_X_chunks[0], X_1 + 5)
+        assert_array_equal(model.received_X_chunks[1], X_2 + 5)
+
+    def test_partial_fit_rejects_step_without_partial_fit(self):
+        pipeline = Pipeline([
+            ("mock_scaler", MockScaler())
+        ])
+
+        with pytest.raises(
+            ValueError,
+            match="Step 'mock_scaler' does not support partial_fit"
+        ):
+            pipeline.partial_fit(np.array([[1], [2]]))

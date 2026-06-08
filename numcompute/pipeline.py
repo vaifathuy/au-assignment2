@@ -57,6 +57,50 @@ class Pipeline():
                     X = step.transform(X)  # type: ignore[attr-defined]
         return self
 
+    def partial_fit(self, X, y=None) -> 'Pipeline':
+        """
+        Incrementally update the pipeline from a newly received data chunk.
+
+        Each transformer is updated using ``partial_fit()`` and then applied
+        using ``transform()`` before the chunk is passed to the next step.
+        The final model receives the fully transformed chunk.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Incoming feature chunk of shape (m, n).
+        y : np.ndarray, optional
+            Target values for the incoming chunk.
+
+        Returns
+        -------
+        Pipeline
+            The updated pipeline instance.
+
+        Raises
+        ------
+        ValueError
+            If a step does not provide a ``partial_fit()`` method.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(sum of each step's partial-fit cost +
+            sum of each transformer's transform cost).
+        Space Complexity:
+            O(m * n) for transformed chunks held between steps.
+        """
+        for name, step in self.steps:
+            if hasattr(step, "partial_fit"):
+                step.partial_fit(X, y)
+                if hasattr(step, "transform"):
+                    X = step.transform(X)
+            else:
+                raise ValueError(
+                    f"Step '{name}' does not support partial_fit()."
+                )
+        return self
+
     def predict(self, X) -> np.ndarray:
         """
         Transform data through all preprocessors
@@ -248,6 +292,48 @@ class FeatureUnion():
         """
         for _, transformer in self.transformers:
             transformer.fit(X, y)
+        return self
+
+    def partial_fit(self, X, y=None) -> "FeatureUnion":
+        """
+        Incrementally update every transformer using the same incoming chunk.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Incoming feature chunk.
+        y : np.ndarray, optional
+            Target values passed to each transformer.
+
+        Returns
+        -------
+        FeatureUnion
+            The updated feature-union instance.
+
+        Raises
+        ------
+        ValueError
+            If a transformer does not provide ``partial_fit()``.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(sum of each transformer's partial-fit cost).
+        Space Complexity:
+            O(1), excluding retained transformer state.
+        """
+        # Loop over each transformer.
+        # Verify it supports partial_fit().
+        # Call transformer.partial_fit(X, y).
+        # Return self.
+        for name, transformer in self.transformers:
+            if hasattr(transformer, "partial_fit"):
+                transformer.partial_fit(X, y)
+            else:
+                raise ValueError(
+                    f"Step '{name}' does not support partial_fit()."
+                )
+
         return self
 
     def transform(self, X):
