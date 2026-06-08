@@ -8,6 +8,7 @@ from numcompute.metrics import (
     recall,
     Recall,
     f1,
+    F1,
     confusion_matrix,
     ConfusionMatrix,
     mse,
@@ -1243,6 +1244,58 @@ class TestRecallStream:
 
     def test_reset_clears_statistics(self):
         metric = Recall()
+        metric.update_stats(
+            np.array([1, 0]),
+            np.array([1, 1])
+        )
+        metric.reset()
+        npt.assert_equal(metric.count, 0)
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
+        )
+
+
+class TestF1Stream:
+
+    def test_binary_f1_single_chunk(self):
+        metric = F1()
+        metric.update_stats(
+            np.array([1, 0, 1, 1]),
+            np.array([1, 1, 0, 1])
+        )
+        npt.assert_allclose(metric.result(), 0.6666666667)
+
+    def test_f1_accumulates_multiple_chunks(self):
+        metric = F1()
+        metric.update_stats(
+            np.array([1, 0]),
+            np.array([1, 1])
+        )
+
+        metric.update_stats(
+            np.array([1, 1]),
+            np.array([0, 1])
+        )
+
+        npt.assert_allclose(metric.result(), 0.6666666667)
+        npt.assert_equal(metric.count, 4)
+
+    def test_streaming_f1_matches_batch_f1(self):
+        metric = F1()
+        y_true = np.array([1, 0, 1, 1, 0])
+        y_pred = np.array([1, 1, 0, 1, 0])
+        expected = f1(y_true, y_pred)
+
+        metric.update_stats(y_true[:2], y_pred[:2])
+        metric.update_stats(y_true[2:], y_pred[2:])
+
+        npt.assert_allclose(metric.result(), expected)
+
+    def test_reset_clears_statistics(self):
+        metric = F1()
         metric.update_stats(
             np.array([1, 0]),
             np.array([1, 1])

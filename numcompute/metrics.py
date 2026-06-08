@@ -580,6 +580,103 @@ def auc(x: np.ndarray, y: np.ndarray) -> float:
 
 
 # Streaming Support
+def _classification_stats_from_matrix(
+    matrix: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Calculate per-class classification statistics from a confusion matrix.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Confusion matrix of shape (k, k), where rows represent actual
+        classes and columns represent predicted classes.
+
+    Returns
+    -------
+    true_positives : np.ndarray
+        Correct predictions for each class.
+    false_positives : np.ndarray
+        Incorrect predictions assigned to each class.
+    false_negatives : np.ndarray
+        Actual observations missed for each class.
+    supports : np.ndarray
+        Number of actual observations for each class.
+
+    Complexity
+    ----------
+    Time Complexity:
+        O(k²), where k is the number of classes.
+    Space Complexity:
+        O(k) for the returned arrays.
+    """
+    true_positives = np.diag(matrix)
+    predicted_counts = np.sum(matrix, axis=0)
+    supports = np.sum(matrix, axis=1)
+    false_positives = predicted_counts - true_positives
+    false_negatives = supports - true_positives
+
+    return (true_positives, false_positives, false_negatives, supports)
+
+
+def _safe_divide(
+    numerators: np.ndarray,
+    denominators: np.ndarray
+) -> np.ndarray:
+    """
+    Divide corresponding values safely, returning 0.0 when a denominator
+    is zero.
+    """
+    if numerators.shape != denominators.shape:
+        raise ValueError(
+            "numerators and denominators must have the same shape."
+        )
+
+    results = []
+
+    for numerator, denominator in zip(
+        numerators,
+        denominators
+    ):
+        if denominator == 0:
+            results.append(0.0)
+        else:
+            results.append(numerator / denominator)
+
+    return np.array(results, dtype=float)
+
+
+def _aggregate_class_scores(
+    scores: np.ndarray,
+    matrix: np.ndarray,
+    classes: np.ndarray,
+    average: str,
+    pos_label
+) -> float:
+    """
+    Aggregate per-class metric scores using the requested averaging method.
+    """
+    if average == "binary":
+        matching_indexes = np.where(classes == pos_label)[0]
+
+        if matching_indexes.size == 0:
+            return 0.0
+        positive_index = matching_indexes[0]
+        return float(scores[positive_index])
+
+    if average == "macro":
+        return float(np.mean(scores))
+
+    if average == "weighted":
+        supports = np.sum(matrix, axis=1)
+        return float(np.sum(scores * supports) / np.sum(supports))
+
+    if average == "micro":
+        correct_predictions = np.sum(np.diag(matrix))
+        total_predictions = np.sum(matrix)
+        return float(correct_predictions / total_predictions)
+
+
 class Accuracy:
     """
     Incrementally calculate classification accuracy from prediction chunks.
@@ -1193,89 +1290,18 @@ class Precision:
     def result(self) -> float:
         """
         Return the accumulated precision score.
-
-        Returns
-        -------
-        float
-            Precision score calculated using the configured averaging method.
-
-        Raises
-        ------
-        ValueError
-            If no predictions have been accumulated.
-
-        Complexity
-        ----------
-        Time Complexity:
-            O(k²), where k is the number of known classes.
-        Space Complexity:
-            O(k²) for the copied confusion matrix.
         """
         matrix = self._confusion_matrix.result()
         classes = self._confusion_matrix.classes
+        precisions = self._precision_from_matrix(matrix)
 
-        if self.average == "binary":
-            return self._binary_precision(matrix, classes)
-
-        precisions = self._per_class_precisions(matrix)
-
-        if self.average == "macro":
-            return float(np.mean(precisions))
-
-        if self.average == "weighted":
-            supports = np.sum(matrix, axis=1)
-            return float(
-                np.sum(precisions * supports) / np.sum(supports)
-            )
-
-        true_positives = np.sum(np.diag(matrix))
-        total_predictions = np.sum(matrix)
-
-        return float(true_positives / total_predictions)
-
-    def _binary_precision(
-        self,
-        matrix: np.ndarray,
-        classes: np.ndarray
-    ) -> float:
-        matching_indexes = np.where(classes == self.pos_label)[0]
-
-        if matching_indexes.size == 0:
-            return 0.0
-
-        positive_index = matching_indexes[0]
-
-        true_positive = matrix[
-            positive_index,
-            positive_index
-        ]
-
-        predicted_positive = np.sum(matrix[:, positive_index])
-
-        if predicted_positive == 0:
-            return 0.0
-
-        return float(true_positive / predicted_positive)
-
-    # Calculate precision separately for each known class.
-    def _per_class_precisions(
-        self,
-        matrix: np.ndarray
-    ) -> np.ndarray:
-        true_positives = np.diag(matrix)
-        predicted_counts = np.sum(matrix, axis=0)
-        precisions = []
-
-        for true_positive, predicted_count in zip(
-            true_positives,
-            predicted_counts
-        ):
-            if predicted_count == 0:
-                precisions.append(0.0)
-            else:
-                precisions.append(true_positive / predicted_count)
-
-        return np.array(precisions, dtype=float)
+        return _aggregate_class_scores(
+            scores=precisions,
+            matrix=matrix,
+            classes=classes,
+            average=self.average,
+            pos_label=self.pos_label
+        )
 
     def reset(self) -> Self:
         """
@@ -1296,6 +1322,23 @@ class Precision:
         self._confusion_matrix.reset()
 
         return self
+
+    @staticmethod
+    def _precision_from_matrix(matrix: np.ndarray) -> np.ndarray:
+        """
+        Calculate precision separately for each known class.
+        """
+        (
+            true_positives,
+            false_positives,
+            _,
+            _
+        ) = _classification_stats_from_matrix(matrix)
+
+        return _safe_divide(
+            true_positives,
+            true_positives + false_positives
+        )
 
 
 class Recall:
@@ -1438,103 +1481,18 @@ class Recall:
     def result(self) -> float:
         """
         Return the accumulated recall score.
-
-        Returns
-        -------
-        float
-            Recall score calculated using the configured averaging method.
-
-        Raises
-        ------
-        ValueError
-            If no predictions have been accumulated.
-
-        Complexity
-        ----------
-        Time Complexity:
-            O(k²), where k is the number of known classes.
-        Space Complexity:
-            O(k²) for the copied confusion matrix.
         """
         matrix = self._confusion_matrix.result()
         classes = self._confusion_matrix.classes
+        recalls = self._recall_from_matrix(matrix)
 
-        if self.average == "binary":
-            return self._binary_recall(matrix, classes)
-
-        recalls = self._per_class_recalls(matrix)
-
-        if self.average == "macro":
-            return float(np.mean(recalls))
-
-        if self.average == "weighted":
-            supports = np.sum(matrix, axis=1)
-            return float(np.sum(recalls * supports) / np.sum(supports))
-
-        true_positives = np.sum(np.diag(matrix))
-        total_observations = np.sum(matrix)
-        return float(true_positives / total_observations)
-
-    def _binary_recall(
-        self,
-        matrix: np.ndarray,
-        classes: np.ndarray
-    ) -> float:
-        """
-        Calculate recall for the configured positive class.
-
-        Parameters
-        ----------
-        matrix : np.ndarray
-            Accumulated confusion matrix.
-        classes : np.ndarray
-            Known class labels in stable matrix order.
-
-        Returns
-        -------
-        float
-            Recall for ``pos_label``. Returns 0.0 if the positive class has
-            not appeared as an actual label.
-
-        Complexity
-        ----------
-        Time Complexity:
-            O(k), where k is the number of known classes.
-        Space Complexity:
-            O(k) for locating the positive-label index.
-        """
-        matching_indexes = np.where(classes == self.pos_label)[0]
-
-        if matching_indexes.size == 0:
-            return 0.0
-
-        positive_index = matching_indexes[0]
-        true_positive = matrix[positive_index, positive_index]
-        actual_positive = np.sum(matrix[positive_index, :])
-
-        if actual_positive == 0:
-            return 0.0
-
-        return float(true_positive / actual_positive)
-
-    # Calculate recall separately for each known class.
-    def _per_class_recalls(
-        self,
-        matrix: np.ndarray
-    ) -> np.ndarray:
-        true_positives = np.diag(matrix)
-        actual_counts = np.sum(matrix, axis=1)
-        recalls = []
-
-        for true_positive, actual_count in zip(
-            true_positives, actual_counts
-        ):
-            if actual_count == 0:
-                recalls.append(0.0)
-            else:
-                recalls.append(true_positive / actual_count)
-
-        return np.array(recalls, dtype=float)
+        return _aggregate_class_scores(
+            scores=recalls,
+            matrix=matrix,
+            classes=classes,
+            average=self.average,
+            pos_label=self.pos_label
+        )
 
     def reset(self) -> Self:
         """
@@ -1551,6 +1509,196 @@ class Recall:
             O(1).
         Space Complexity:
             O(1).
+        """
+        self._confusion_matrix.reset()
+
+        return self
+
+    @staticmethod
+    def _recall_from_matrix(
+        matrix: np.ndarray
+    ) -> np.ndarray:
+        """
+        Calculate recall separately for each known class.
+        """
+        (
+            true_positives,
+            _,
+            false_negatives,
+            _
+        ) = _classification_stats_from_matrix(
+            matrix
+        )
+
+        return _safe_divide(
+            true_positives,
+            true_positives + false_negatives
+        )
+
+
+class F1:
+    """
+    Incrementally calculate the F1 score from prediction chunks.
+
+    The class reuses ``ConfusionMatrix`` to retain class-to-class counts.
+    """
+
+    def __init__(
+        self,
+        average: str = "binary",
+        pos_label=1
+    ):
+        """
+        Initialize an empty streaming F1 tracker.
+
+        Parameters
+        ----------
+        average : {'binary', 'macro', 'weighted', 'micro'}, optional
+            Determines how F1 is calculated.
+        pos_label : optional
+            Class label treated as positive when ``average='binary'``.
+            Default is 1.
+
+        Raises
+        ------
+        ValueError
+            If ``average`` is not supported.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1) before prediction chunks are processed.
+        """
+        if average not in {
+            "binary",
+            "macro",
+            "weighted",
+            "micro"
+        }:
+            raise ValueError(
+                "Invalid average type. Use 'binary', 'macro', "
+                "'weighted', or 'micro'."
+            )
+
+        self.average = average
+        self.pos_label = pos_label
+        self._confusion_matrix = ConfusionMatrix()
+
+    @property
+    def classes(self) -> np.ndarray:
+        """
+        Return a copy of the known class labels.
+        """
+        return self._confusion_matrix.classes
+
+    @property
+    def count(self) -> int:
+        """
+        Return the total number of processed predictions.
+        """
+        return self._confusion_matrix.count
+
+    def update_stats(
+        self,
+        y_true: np.ndarray,
+        y_pred: np.ndarray
+    ) -> Self:
+        """
+        Incrementally update F1 statistics from a prediction chunk.
+
+        Parameters
+        ----------
+        y_true : np.ndarray
+            Ground-truth labels for the incoming chunk.
+        y_pred : np.ndarray
+            Predicted labels for the incoming chunk.
+
+        Returns
+        -------
+        F1
+            The updated instance.
+        """
+        self._confusion_matrix.update_stats(
+            y_true,
+            y_pred
+        )
+
+        return self
+
+    def result(self) -> float:
+        """
+        Return the accumulated F1 score.
+
+        Returns
+        -------
+        float
+            F1 score calculated using the configured averaging method.
+
+        Raises
+        ------
+        ValueError
+            If no predictions have been accumulated.
+        """
+        matrix = self._confusion_matrix.result()
+        classes = self._confusion_matrix.classes
+        precisions = Precision._precision_from_matrix(matrix)
+        recalls = Recall._recall_from_matrix(matrix)
+        f1_scores = self._f1_from_precision_and_recall(precisions, recalls)
+
+        return _aggregate_class_scores(
+            scores=f1_scores,
+            matrix=matrix,
+            classes=classes,
+            average=self.average,
+            pos_label=self.pos_label
+        )
+
+    @staticmethod
+    def _f1_from_precision_and_recall(
+        precisions: np.ndarray,
+        recalls: np.ndarray
+    ) -> np.ndarray:
+        """
+        Calculate per-class F1 scores from precision and recall values.
+
+        Parameters
+        ----------
+        precisions : np.ndarray
+            Per-class precision values.
+        recalls : np.ndarray
+            Per-class recall values.
+
+        Returns
+        -------
+        np.ndarray
+            Per-class F1 values.
+        """
+        f1_scores = []
+
+        for precision, recall in zip(
+            precisions,
+            recalls
+        ):
+            if precision + recall == 0:
+                f1_scores.append(0.0)
+            else:
+                f1_scores.append(
+                    2 * precision * recall
+                    / (precision + recall)
+                )
+
+        return np.array(f1_scores, dtype=float)
+
+    def reset(self) -> Self:
+        """
+        Clear all accumulated F1 statistics.
+
+        Returns
+        -------
+        F1
+            The reset instance.
         """
         self._confusion_matrix.reset()
 
