@@ -6,6 +6,7 @@ from numcompute.metrics import (
     precision,
     Precision,
     recall,
+    Recall,
     f1,
     confusion_matrix,
     ConfusionMatrix,
@@ -1174,6 +1175,74 @@ class TestPrecisionStream:
 
     def test_reset_clears_statistics(self):
         metric = Precision()
+        metric.update_stats(
+            np.array([1, 0]),
+            np.array([1, 1])
+        )
+        metric.reset()
+        npt.assert_equal(metric.count, 0)
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
+        )
+
+
+class TestRecallStream:
+
+    def test_binary_recall_single_chunk(self):
+        metric = Recall()
+        metric.update_stats(
+            np.array([1, 0, 1, 1]),
+            np.array([1, 1, 0, 1])
+        )
+        npt.assert_allclose(metric.result(), 0.6666666667)
+
+    def test_recall_accumulates_multiple_chunks(self):
+        metric = Recall()
+        metric.update_stats(
+            np.array([1, 0]),
+            np.array([1, 1])
+        )
+        metric.update_stats(
+            np.array([1, 1]),
+            np.array([0, 1])
+        )
+        npt.assert_allclose(metric.result(), 0.6666666667)
+        npt.assert_equal(metric.count, 4)
+
+    def test_streaming_recall_matches_batch_recall(self):
+        metric = Recall()
+        y_true = np.array([1, 0, 1, 1, 0])
+        y_pred = np.array([1, 1, 0, 1, 0])
+        expected = recall(y_true, y_pred)
+
+        metric.update_stats(y_true[:2], y_pred[:2])
+        metric.update_stats(y_true[2:], y_pred[2:])
+
+        npt.assert_allclose(metric.result(), expected)
+
+    def test_returns_zero_if_positive_class_never_appears(self):
+        metric = Recall()
+        metric.update_stats(
+            np.array([0, 0, 0]),
+            np.array([0, 1, 0])
+        )
+        npt.assert_allclose(metric.result(), 0.0)
+
+    def test_macro_recall(self):
+        metric = Recall(average="macro")
+
+        y_true = np.array([0, 1, 2, 0, 1, 2])
+        y_pred = np.array([0, 2, 1, 0, 0, 2])
+        expected = recall(y_true, y_pred, average="macro")
+
+        metric.update_stats(y_true, y_pred)
+        npt.assert_allclose(metric.result(), expected)
+
+    def test_reset_clears_statistics(self):
+        metric = Recall()
         metric.update_stats(
             np.array([1, 0]),
             np.array([1, 1])
