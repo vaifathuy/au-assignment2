@@ -7,6 +7,7 @@ from numcompute.metrics import (
     recall,
     f1,
     confusion_matrix,
+    ConfusionMatrix,
     mse,
     MSE,
     auc,
@@ -948,4 +949,174 @@ class TestMSEStream:
                 "three",
                 "four"
             ])
+        )
+
+
+class TestConfusionMatrixStream:
+
+    def test_update_stats_single_chunk(self):
+        metric = ConfusionMatrix()
+        result = metric.update_stats(
+            np.array([0, 0, 1, 1]),
+            np.array([0, 1, 1, 1])
+        )
+
+        npt.assert_equal(result, metric)
+        npt.assert_equal(metric.count, 4)
+        npt.assert_array_equal(metric.classes, np.array([0, 1]))
+        npt.assert_array_equal(
+            metric.result(),
+            np.array([
+                [1, 1],
+                [0, 2]
+            ])
+        )
+
+    def test_update_stats_accumulates_multiple_chunks(self):
+        metric = ConfusionMatrix()
+        metric.update_stats(
+            np.array([0, 0, 1, 1]),
+            np.array([0, 1, 1, 1])
+        )
+        metric.update_stats(
+            np.array([1, 0]),
+            np.array([0, 0])
+        )
+
+        npt.assert_equal(metric.count, 6)
+        npt.assert_array_equal(
+            metric.result(),
+            np.array([
+                [2, 1],
+                [1, 2]
+            ])
+        )
+
+    def test_existing_class_positions_do_not_shift(self):
+        metric = ConfusionMatrix()
+
+        metric.update_stats(
+            np.array(["cat", "dog", "dog"]),
+            np.array(["cat", "cat", "dog"])
+        )
+
+        npt.assert_array_equal(metric.classes, np.array(["cat", "dog"]))
+        npt.assert_array_equal(
+            metric.result(),
+            np.array([
+                [1, 0],
+                [1, 1]
+            ])
+        )
+
+        metric.update_stats(
+            np.array(["bird"]),
+            np.array(["cat"])
+        )
+        npt.assert_array_equal(
+            metric.classes,
+            np.array([
+                "cat",
+                "dog",
+                "bird"
+            ])
+        )
+
+        npt.assert_array_equal(
+            metric.result(),
+            np.array([
+                [1, 0, 0],
+                [1, 1, 0],
+                [1, 0, 0]
+            ])
+        )
+
+    def test_repeated_pairs_are_counted_multiple_times(self):
+        metric = ConfusionMatrix()
+        metric.update_stats(
+            np.array([1, 1, 1, 1]),
+            np.array([0, 0, 0, 0])
+        )
+        npt.assert_array_equal(metric.classes, np.array([1, 0]))
+        npt.assert_array_equal(
+            metric.result(),
+            np.array([
+                [0, 4],
+                [0, 0]
+            ])
+        )
+
+    def test_supports_multidimensional_inputs(self):
+        metric = ConfusionMatrix()
+        metric.update_stats(
+            np.array([
+                [0],
+                [1],
+                [2]
+            ]),
+            np.array([
+                [0],
+                [2],
+                [1]
+            ])
+        )
+
+        npt.assert_equal(metric.count, 3)
+        npt.assert_array_equal(metric.classes, np.array([0, 1, 2]))
+        npt.assert_array_equal(
+            metric.result(),
+            np.array([
+                [1, 0, 0],
+                [0, 0, 1],
+                [0, 1, 0]
+            ])
+        )
+
+    def test_classes_property_returns_copy(self):
+        metric = ConfusionMatrix()
+        metric.update_stats(
+            np.array([0, 1]),
+            np.array([0, 1])
+        )
+        external_classes = metric.classes
+        external_classes[0] = 999
+        npt.assert_array_equal(metric.classes, np.array([0, 1]))
+
+    def test_reset_clears_accumulated_statistics(self):
+        metric = ConfusionMatrix()
+        metric.update_stats(
+            np.array([0, 1]),
+            np.array([0, 1])
+        )
+        npt.assert_equal(metric.reset(), metric)
+        npt.assert_equal(metric.count, 0)
+        npt.assert_array_equal(metric.classes, np.array([]))
+
+    def test_result_raises_before_predictions_arrive(self):
+        metric = ConfusionMatrix()
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
+        )
+
+    def test_update_stats_rejects_empty_inputs(self):
+        metric = ConfusionMatrix()
+
+        npt.assert_raises(
+            ValueError,
+            metric.update_stats,
+            np.array([]),
+            np.array([])
+        )
+
+    def test_update_stats_rejects_length_mismatch(self):
+        metric = ConfusionMatrix()
+
+        npt.assert_raises(
+            ValueError,
+            metric.update_stats,
+            np.array([0, 1, 2]),
+            np.array([0, 1])
         )

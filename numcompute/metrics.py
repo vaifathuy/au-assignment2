@@ -864,3 +864,187 @@ class MSE:
         self._count = 0
 
         return self
+
+
+class ConfusionMatrix:
+    """
+    Incrementally accumulate a confusion matrix from prediction chunks.
+
+    Examples
+    --------
+    >>> metric = ConfusionMatrix()
+    >>> metric.update_stats(
+    ...     np.array([0, 0, 1, 1]),
+    ...     np.array([0, 1, 1, 1])
+    ... )
+    >>> metric.result()
+    array([[1, 1],
+           [0, 2]])
+
+    >>> metric.update_stats(
+    ...     np.array([2, 1, 2]),
+    ...     np.array([2, 2, 1])
+    ... )
+    >>> metric.classes
+    array([0, 1, 2])
+    >>> metric.result()
+    array([[1, 1, 0],
+           [0, 2, 1],
+           [0, 1, 1]])
+    """
+
+    def __init__(self):
+        self.reset()
+
+    @property
+    def classes(self) -> np.ndarray:
+        """
+        Return a copy of the known class labels in stable column order.
+        """
+        return np.asarray(self._classes).copy()
+
+    @property
+    def count(self) -> int:
+        """
+        Return the total number of processed predictions.
+        """
+        return self._count
+
+    def update_stats(
+        self,
+        y_true: np.ndarray,
+        y_pred: np.ndarray
+    ) -> Self:
+        """
+        Incrementally update the confusion matrix from a prediction chunk.
+
+        Parameters
+        ----------
+        y_true : np.ndarray
+            Ground-truth labels for the incoming chunk. Any shape is accepted
+            because values are flattened internally.
+        y_pred : np.ndarray
+            Predicted labels for the incoming chunk. Must contain the same
+            number of values as ``y_true``.
+
+        Returns
+        -------
+        ConfusionMatrix
+            The updated instance.
+
+        Raises
+        ------
+        ValueError
+            If either input array is empty.
+            If the flattened arrays have different lengths.
+        TypeError
+            If a class label is not hashable.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(m) in the usual case, where m is the number of predictions
+            in the incoming chunk.
+
+            If new classes appear, matrix expansion requires O(k²), where
+            k is the updated total number of known classes.
+        Space Complexity:
+            O(k²) for the retained confusion matrix.
+        """
+        y_true, y_pred = _validate_and_flatten(y_true, y_pred)
+
+        self._append_new_classes(np.concatenate([y_true, y_pred]))
+
+        true_indexes = np.array(
+            [self._class_to_index[label] for label in y_true],
+            dtype=int
+        )
+        pred_indexes = np.array(
+            [self._class_to_index[label] for label in y_pred],
+            dtype=int
+        )
+
+        # Increment every true-label / predicted-label pair.
+        np.add.at(self._matrix, (true_indexes, pred_indexes), 1)
+
+        self._count += y_true.size
+
+        return self
+
+    def _append_new_classes(
+        self,
+        labels: np.ndarray
+    ) -> None:
+
+        old_class_count = len(self._classes)
+
+        for label in labels:
+            if label not in self._class_to_index:
+                self._class_to_index[label] = len(self._classes)
+                self._classes.append(label)
+
+        new_class_count = len(self._classes)
+
+        if new_class_count == old_class_count:
+            return
+
+        expanded_matrix = np.zeros(
+            (new_class_count, new_class_count),
+            dtype=int
+        )
+
+        expanded_matrix[:old_class_count, :old_class_count] = self._matrix
+
+        self._matrix = expanded_matrix
+
+    def result(self) -> np.ndarray:
+        """
+        Return a copy of the accumulated confusion matrix.
+
+        Returns
+        -------
+        np.ndarray
+            Confusion matrix of shape (k, k), where k is the number of
+            observed classes.
+
+        Raises
+        ------
+        ValueError
+            If no predictions have been accumulated.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(k²) for returning a defensive copy.
+        Space Complexity:
+            O(k²) for the returned array.
+        """
+        if self._count == 0:
+            raise ValueError(
+                "No predictions have been accumulated yet."
+            )
+
+        return self._matrix.copy()
+
+    def reset(self) -> Self:
+        """
+        Clear all accumulated classes and matrix counts.
+
+        Returns
+        -------
+        ConfusionMatrix
+            The reset instance.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1).
+        """
+        self._classes = []
+        self._class_to_index = {}
+        self._matrix = np.zeros((0, 0), dtype=int)
+        self._count = 0
+
+        return self
