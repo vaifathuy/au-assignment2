@@ -1,4 +1,4 @@
-from numcompute.preprocessing import (
+from numcompute_stream.preprocessing import (
     SimpleImputer,
     MinMaxScaler,
     StandardScaler,

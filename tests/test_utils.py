@@ -1,7 +1,7 @@
 import numpy as np
 import math
 from numpy.testing import assert_raises_regex
-from numcompute.utils import validate_numeric_array
+from numcompute_stream.utils import validate_numeric_array
 
 
 class TestValidateNumericArray:

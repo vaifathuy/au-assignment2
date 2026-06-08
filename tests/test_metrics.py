@@ -1,6 +1,6 @@
 import numpy as np
 import numpy.testing as npt
-from numcompute.metrics import (
+from numcompute_stream.metrics import (
     accuracy,
     Accuracy,
     precision,

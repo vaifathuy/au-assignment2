@@ -1,4 +1,4 @@
-from numcompute.stats import (
+from numcompute_stream.stats import (
     Statistics, Histogram, Quantile,
     histogram, quantile
 )

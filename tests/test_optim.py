@@ -3,7 +3,7 @@ from numpy.testing import (
     assert_raises_regex,
     assert_allclose,
 )
-from numcompute import optim
+from numcompute_stream import optim
 
 
 # Test with a simple quadratic function f(x) = x^2

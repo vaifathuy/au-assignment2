@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Self
 import numpy as np
-from numcompute.utils import validate_numeric_array
+from numcompute_stream.utils import validate_numeric_array
 
 
 class _BasePreprocessor(ABC):

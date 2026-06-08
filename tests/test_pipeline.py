@@ -1,6 +1,6 @@
-from numcompute.pipeline import Pipeline
-from numcompute.pipeline import FeatureUnion
-from numcompute.preprocessing import (
+from numcompute_stream.pipeline import Pipeline
+from numcompute_stream.pipeline import FeatureUnion
+from numcompute_stream.preprocessing import (
     SimpleImputer,
     MinMaxScaler,
     StandardScaler

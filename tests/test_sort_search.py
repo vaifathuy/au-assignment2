@@ -1,5 +1,5 @@
 from numpy.testing import assert_array_equal
-from numcompute.sort_search import (
+from numcompute_stream.sort_search import (
     quickselect,
     topk,
     binary_search,

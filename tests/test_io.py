@@ -1,4 +1,4 @@
-from numcompute.io import load_csv
+from numcompute_stream.io import load_csv
 from pathlib import Path
 import numpy as np
 import pytest

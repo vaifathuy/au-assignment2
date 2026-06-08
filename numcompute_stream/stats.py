@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Self
-from numcompute.utils import validate_numeric_array
+from numcompute_stream.utils import validate_numeric_array
 
 
 class Statistics:
