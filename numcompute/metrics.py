@@ -1048,3 +1048,256 @@ class ConfusionMatrix:
         self._count = 0
 
         return self
+
+
+class Precision:
+    """
+    Incrementally calculate precision from prediction chunks.
+
+    Precision measures how many predicted observations for a class are
+    correct:
+
+        precision = true positives / predicted positives
+
+    The class reuses ``ConfusionMatrix`` to retain class-to-class counts as
+    prediction chunks arrive.
+
+    Examples
+    --------
+    Binary precision:
+
+    >>> metric = Precision()
+    >>> metric.update_stats(
+    ...     np.array([1, 0, 1, 1]),
+    ...     np.array([1, 1, 0, 1])
+    ... )
+    >>> metric.result()
+    0.6666666666666666
+
+    Multiclass macro precision:
+
+    >>> metric = Precision(average="macro")
+    >>> metric.update_stats(
+    ...     np.array([0, 1, 2, 0]),
+    ...     np.array([0, 2, 2, 0])
+    ... )
+    >>> metric.result()
+    0.5
+    """
+
+    def __init__(
+        self,
+        average: str = "binary",
+        pos_label=1
+    ):
+        """
+        Initialize an empty streaming precision tracker.
+
+        Parameters
+        ----------
+        average : {'binary', 'macro', 'weighted', 'micro'}, optional
+            Determines how precision is calculated.
+
+            - ``'binary'`` returns precision for ``pos_label``.
+            - ``'macro'`` returns the unweighted mean of per-class precision.
+            - ``'weighted'`` weights per-class precision by class support.
+            - ``'micro'`` calculates precision from the total number of
+              correct and incorrect predictions.
+
+            Default is ``'binary'``.
+        pos_label : optional
+            Class label treated as positive when ``average='binary'``.
+            Default is 1.
+
+        Raises
+        ------
+        ValueError
+            If ``average`` is not supported.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1) before prediction chunks are processed.
+        """
+        if average not in {
+            "binary",
+            "macro",
+            "weighted",
+            "micro"
+        }:
+            raise ValueError(
+                "Invalid average type. Use 'binary', 'macro', "
+                "'weighted', or 'micro'."
+            )
+
+        self.average = average
+        self.pos_label = pos_label
+        self._confusion_matrix = ConfusionMatrix()
+
+    @property
+    def classes(self) -> np.ndarray:
+        """
+        Return a copy of the known class labels.
+        """
+        return self._confusion_matrix.classes
+
+    @property
+    def count(self) -> int:
+        """
+        Return the total number of processed predictions.
+        """
+        return self._confusion_matrix.count
+
+    def update_stats(
+        self,
+        y_true: np.ndarray,
+        y_pred: np.ndarray
+    ) -> Self:
+        """
+        Incrementally update precision statistics from a prediction chunk.
+
+        Parameters
+        ----------
+        y_true : np.ndarray
+            Ground-truth labels for the incoming chunk.
+        y_pred : np.ndarray
+            Predicted labels for the incoming chunk. Must contain the same
+            number of values as ``y_true``.
+
+        Returns
+        -------
+        Precision
+            The updated instance.
+
+        Raises
+        ------
+        ValueError
+            If either input array is empty.
+            If the flattened arrays have different lengths.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(m) in the usual case, where m is the number of predictions
+            in the incoming chunk.
+
+            If new classes appear, matrix expansion requires O(k²), where
+            k is the updated number of known classes.
+        Space Complexity:
+            O(k²) for the retained confusion matrix.
+        """
+        self._confusion_matrix.update_stats(
+            y_true,
+            y_pred
+        )
+
+        return self
+
+    def result(self) -> float:
+        """
+        Return the accumulated precision score.
+
+        Returns
+        -------
+        float
+            Precision score calculated using the configured averaging method.
+
+        Raises
+        ------
+        ValueError
+            If no predictions have been accumulated.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(k²), where k is the number of known classes.
+        Space Complexity:
+            O(k²) for the copied confusion matrix.
+        """
+        matrix = self._confusion_matrix.result()
+        classes = self._confusion_matrix.classes
+
+        if self.average == "binary":
+            return self._binary_precision(matrix, classes)
+
+        precisions = self._per_class_precisions(matrix)
+
+        if self.average == "macro":
+            return float(np.mean(precisions))
+
+        if self.average == "weighted":
+            supports = np.sum(matrix, axis=1)
+            return float(
+                np.sum(precisions * supports) / np.sum(supports)
+            )
+
+        true_positives = np.sum(np.diag(matrix))
+        total_predictions = np.sum(matrix)
+
+        return float(true_positives / total_predictions)
+
+    def _binary_precision(
+        self,
+        matrix: np.ndarray,
+        classes: np.ndarray
+    ) -> float:
+        matching_indexes = np.where(classes == self.pos_label)[0]
+
+        if matching_indexes.size == 0:
+            return 0.0
+
+        positive_index = matching_indexes[0]
+
+        true_positive = matrix[
+            positive_index,
+            positive_index
+        ]
+
+        predicted_positive = np.sum(matrix[:, positive_index])
+
+        if predicted_positive == 0:
+            return 0.0
+
+        return float(true_positive / predicted_positive)
+
+    # Calculate precision separately for each known class.
+    def _per_class_precisions(
+        self,
+        matrix: np.ndarray
+    ) -> np.ndarray:
+        true_positives = np.diag(matrix)
+        predicted_counts = np.sum(matrix, axis=0)
+        precisions = []
+
+        for true_positive, predicted_count in zip(
+            true_positives,
+            predicted_counts
+        ):
+            if predicted_count == 0:
+                precisions.append(0.0)
+            else:
+                precisions.append(true_positive / predicted_count)
+
+        return np.array(precisions, dtype=float)
+
+    def reset(self) -> Self:
+        """
+        Clear all accumulated precision statistics.
+
+        Returns
+        -------
+        Precision
+            The reset instance.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1).
+        """
+        self._confusion_matrix.reset()
+
+        return self

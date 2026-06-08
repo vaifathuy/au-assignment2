@@ -4,6 +4,7 @@ from numcompute.metrics import (
     accuracy,
     Accuracy,
     precision,
+    Precision,
     recall,
     f1,
     confusion_matrix,
@@ -1119,4 +1120,69 @@ class TestConfusionMatrixStream:
             metric.update_stats,
             np.array([0, 1, 2]),
             np.array([0, 1])
+        )
+
+
+class TestPrecisionStream:
+
+    def test_binary_precision_single_chunk(self):
+        metric = Precision()
+        metric.update_stats(
+            np.array([1, 0, 1, 1]),
+            np.array([1, 1, 0, 1])
+        )
+        npt.assert_allclose(metric.result(), 0.6666666667)
+
+    def test_precision_accumulates_multiple_chunks(self):
+        metric = Precision()
+        metric.update_stats(
+            np.array([1, 0]),
+            np.array([1, 1])
+        )
+
+        metric.update_stats(
+            np.array([1, 1]),
+            np.array([0, 1])
+        )
+
+        npt.assert_allclose(metric.result(), 0.6666666667)
+        npt.assert_equal(metric.count, 4)
+
+    def test_returns_zero_if_positive_class_is_never_predicted(self):
+        metric = Precision()
+        metric.update_stats(
+            np.array([1, 0, 1]),
+            np.array([0, 0, 0])
+        )
+        npt.assert_allclose(metric.result(), 0.0)
+
+    def test_macro_precision(self):
+        metric = Precision(average="macro")
+
+        metric.update_stats(
+            np.array([0, 1, 2, 0, 1, 2]),
+            np.array([0, 2, 1, 0, 0, 2])
+        )
+
+        expected = precision(
+            np.array([0, 1, 2, 0, 1, 2]),
+            np.array([0, 2, 1, 0, 0, 2]),
+            average="macro"
+        )
+
+        npt.assert_allclose(metric.result(), expected)
+
+    def test_reset_clears_statistics(self):
+        metric = Precision()
+        metric.update_stats(
+            np.array([1, 0]),
+            np.array([1, 1])
+        )
+        metric.reset()
+        npt.assert_equal(metric.count, 0)
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
         )
