@@ -1968,7 +1968,8 @@ class ROCAUC:
 
     def __init__(
         self,
-        pos_label=1
+        pos_label: int = 1,
+        window_size: int | None = None
     ):
         """
         Initialize an empty streaming ROC-AUC tracker.
@@ -1985,7 +1986,10 @@ class ROCAUC:
         Space Complexity:
             O(1) before prediction chunks are processed.
         """
+        _validate_window_size(window_size)
         self.pos_label = pos_label
+        self.window_size = window_size
+
         self.reset()
 
     @property
@@ -1993,7 +1997,10 @@ class ROCAUC:
         """
         Return the total number of retained observations.
         """
-        return self._count
+        if self.window_size is None:
+            return self._count
+
+        return len(self._recent_observations)
 
     @property
     def y_true(self) -> np.ndarray:
@@ -2012,12 +2019,18 @@ class ROCAUC:
         Space Complexity:
             O(n) for the returned array.
         """
-        if self._count == 0:
-            return np.array([])
+        if self.window_size is None:
+            if self._count == 0:
+                return np.array([])
 
-        return np.concatenate(
-            self._y_true_chunks
-        ).copy()
+            return np.concatenate(
+                self._y_true_chunks
+            ).copy()
+        else:
+            return np.asarray([
+                label
+                for label, _ in self._recent_observations
+            ]).copy()
 
     @property
     def y_scores(self) -> np.ndarray:
@@ -2036,15 +2049,24 @@ class ROCAUC:
         Space Complexity:
             O(n) for the returned array.
         """
-        if self._count == 0:
-            return np.array(
-                [],
+        if self.window_size is None:
+            if self._count == 0:
+                return np.array(
+                    [],
+                    dtype=float
+                )
+
+            return np.concatenate(
+                self._y_score_chunks
+            ).copy()
+        else:
+            return np.asarray(
+                [
+                    score
+                    for _, score in self._recent_observations
+                ],
                 dtype=float
             )
-
-        return np.concatenate(
-            self._y_score_chunks
-        ).copy()
 
     def update(self, y_true: np.ndarray, y_scores: np.ndarray) -> Self:
         """
@@ -2105,11 +2127,22 @@ class ROCAUC:
                 "y_scores must not contain NaN or infinite values."
             )
 
-        self._y_true_chunks.append(y_true.copy())
-        self._y_score_chunks.append(y_scores.copy())
-        self._count += y_true.size
+        if self.window_size is None:
+            self._y_true_chunks.append(y_true.copy())
+            self._y_score_chunks.append(y_scores.copy())
+            self._count += y_true.size
 
-        return self
+            return self
+        else:
+            for label, score in zip(
+                y_true,
+                y_scores
+            ):
+                self._recent_observations.append(
+                    (label, float(score))
+                )
+
+            return self
 
     def roc_curve(
         self
@@ -2145,7 +2178,7 @@ class ROCAUC:
         Space Complexity:
             O(n) for the combined arrays and ROC calculations.
         """
-        if self._count == 0:
+        if self.count == 0:
             raise ValueError(
                 "No predictions have been accumulated yet."
             )
@@ -2201,5 +2234,9 @@ class ROCAUC:
         self._y_true_chunks = []
         self._y_score_chunks = []
         self._count = 0
+
+        self._recent_observations = deque(
+            maxlen=self.window_size
+        )
 
         return self

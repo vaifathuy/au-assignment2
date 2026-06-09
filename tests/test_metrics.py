@@ -1322,7 +1322,7 @@ class TestConfusionMatrixStream:
             np.array([0, 1, 2]),
             np.array([0, 1])
         )
-    
+
     def test_rolling_window_retains_latest_prediction_pairs(self):
         metric = ConfusionMatrix(window_size=3)
 
@@ -2216,4 +2216,257 @@ class TestROCAUCStream:
             ValueError,
             r"No predictions have been accumulated yet\.",
             metric.result
+        )
+
+    def test_rolling_window_retains_latest_observations(self):
+        metric = ROCAUC(window_size=4)
+
+        metric.update(
+            np.array([
+                0,
+                1,
+                0
+            ]),
+            np.array([
+                0.10,
+                0.90,
+                0.80
+            ])
+        )
+
+        npt.assert_equal(metric.count, 3)
+
+        npt.assert_array_equal(
+            metric.y_true,
+            np.array([
+                0,
+                1,
+                0
+            ])
+        )
+
+        npt.assert_allclose(
+            metric.y_scores,
+            np.array([
+                0.10,
+                0.90,
+                0.80
+            ])
+        )
+
+        npt.assert_allclose(
+            metric.result(),
+            1.0
+        )
+
+        metric.update(
+            np.array([
+                1,
+                0
+            ]),
+            np.array([
+                0.60,
+                0.40
+            ])
+        )
+
+        npt.assert_equal(
+            metric.count,
+            4
+        )
+
+        npt.assert_array_equal(
+            metric.y_true,
+            np.array([
+                1,
+                0,
+                1,
+                0
+            ])
+        )
+
+        npt.assert_allclose(
+            metric.y_scores,
+            np.array([
+                0.90,
+                0.80,
+                0.60,
+                0.40
+            ])
+        )
+
+        npt.assert_allclose(
+            metric.result(),
+            0.75
+        )
+
+    def test_rolling_window_discards_values_within_large_chunk(self):
+        metric = ROCAUC(
+            window_size=3
+        )
+
+        metric.update(
+            np.array([
+                0,
+                1,
+                0,
+                1,
+                0
+            ]),
+            np.array([
+                0.10,
+                0.90,
+                0.80,
+                0.60,
+                0.40
+            ])
+        )
+
+        # Only the latest three pairs remain:
+        # (0, 0.80), (1, 0.60), (0, 0.40)
+        #
+        # The positive score 0.60 ranks above one negative score
+        # and below the other negative score.
+        #
+        # AUC = 1 / 2 = 0.5.
+        npt.assert_equal(
+            metric.count,
+            3
+        )
+
+        npt.assert_array_equal(
+            metric.y_true,
+            np.array([
+                0,
+                1,
+                0
+            ])
+        )
+
+        npt.assert_allclose(
+            metric.y_scores,
+            np.array([
+                0.80,
+                0.60,
+                0.40
+            ])
+        )
+
+        npt.assert_allclose(
+            metric.result(),
+            0.5
+        )
+
+    def test_rolling_window_result_requires_both_classes(self):
+        metric = ROCAUC(
+            window_size=2
+        )
+
+        metric.update(
+            np.array([
+                0,
+                1
+            ]),
+            np.array([
+                0.10,
+                0.90
+            ])
+        )
+
+        npt.assert_allclose(
+            metric.result(),
+            1.0
+        )
+
+        metric.update(
+            np.array([
+                1,
+                1
+            ]),
+            np.array([
+                0.70,
+                0.80
+            ])
+        )
+
+        # The earlier negative observation has expired.
+        # The active window now contains only positive labels:
+        # (1, 0.70), (1, 0.80)
+        npt.assert_equal(
+            metric.count,
+            2
+        )
+
+        npt.assert_array_equal(
+            metric.y_true,
+            np.array([
+                1,
+                1
+            ])
+        )
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"y_true must contain both classes\.",
+            metric.result
+        )
+
+    def test_rolling_window_reset_clears_observations(self):
+        metric = ROCAUC(
+            window_size=3
+        )
+
+        metric.update(
+            np.array([
+                0,
+                1
+            ]),
+            np.array([
+                0.10,
+                0.90
+            ])
+        )
+
+        result = metric.reset()
+
+        npt.assert_equal(
+            result,
+            metric
+        )
+
+        npt.assert_equal(
+            metric.count,
+            0
+        )
+
+        npt.assert_array_equal(
+            metric.y_true,
+            np.array([])
+        )
+
+        npt.assert_array_equal(
+            metric.y_scores,
+            np.array([])
+        )
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
+        )
+
+    def test_rejects_zero_window_size(self):
+        npt.assert_raises_regex(
+            ValueError,
+            r"window_size must be greater than zero\.",
+            ROCAUC,
+            window_size=0
+        )
+
+    def test_rejects_non_integer_window_size(self):
+        npt.assert_raises_regex(
+            TypeError,
+            r"window_size must be an integer or None\.",
+            ROCAUC,
+            window_size=2.5
         )
