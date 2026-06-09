@@ -633,7 +633,7 @@ class StandardScaler(_BasePreprocessor):
             self._mean = np.zeros(n_features, dtype=float)
             self._M2 = np.zeros(n_features, dtype=float)
         elif n_features != len(self._mean):
-            ValueError(
+            raise ValueError(
                 "Input array has a different number of features than "
                 "the previously fitted array."
             )

@@ -2,10 +2,13 @@ from . import io, metrics, optim, pipeline, preprocessing, sort_search
 from . import utils
 from .io import load_csv
 from .metrics import (
-    accuracy,
-    confusion_matrix,
-    f1, mse, precision,
-    recall, auc, roc_curve
+    accuracy, Accuracy,
+    confusion_matrix, ConfusionMatrix,
+    f1, F1,
+    mse, MSE,
+    precision, Precision,
+    recall, Recall,
+    auc, roc_curve, ROCAUC
 )
 from .optim import grad, jacobian
 from .pipeline import Pipeline, FeatureUnion
@@ -15,6 +18,9 @@ from .preprocessing import (
     SimpleImputer,
     StandardScaler,
 )
+from .tree import DecisionTreeClassifier
+from .ensemble import EnsembleClassifier
+from .stream import StreamTrainer
 from .rank import rank, percentile
 from .sort_search import (
     binary_search,
@@ -22,6 +28,12 @@ from .sort_search import (
     quickselect,
     stable_sort,
     topk,
+)
+
+from .visualise import (
+    plot_metric_over_time,
+    compare_models,
+    plot_predictions_vs_ground_truth
 )
 
 from .stats import (
@@ -37,11 +49,18 @@ __all__ = [
     "load_csv",
     "metrics",
     "accuracy",
+    "Accuracy",
     "confusion_matrix",
+    "ConfusionMatrix",
     "f1",
+    "F1",
     "mse",
+    "MSE",
     "precision",
+    "Precision",
     "recall",
+    "Recall",
+    "ROCAUC",
     "optim",
     "grad",
     "stats",
@@ -54,6 +73,9 @@ __all__ = [
     "OneHotEncoder",
     "SimpleImputer",
     "StandardScaler",
+    "DecisionTreeClassifier",
+    "EnsembleClassifier",
+    "StreamTrainer",
     "percentile",
     "rank",
     "sort_search",
@@ -69,5 +91,8 @@ __all__ = [
     "Histogram",
     "Quantile",
     "auc",
-    "roc_curve"
+    "roc_curve",
+    "plot_metric_over_time",
+    "compare_models",
+    "plot_predictions_vs_ground_truth"
 ]
