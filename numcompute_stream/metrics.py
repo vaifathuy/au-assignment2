@@ -1589,7 +1589,8 @@ class Precision:
 
 class Recall:
     """
-    Incrementally calculate recall from prediction chunks.
+    Incrementally calculate recall from prediction chunks with 
+    rolling-window option.
 
     The class reuses ``ConfusionMatrix`` to retain class-to-class counts as
     prediction chunks arrive.
@@ -1619,7 +1620,8 @@ class Recall:
 
     def __init__(
         self, average: str = "binary",
-        pos_label=1
+        pos_label=1,
+        window_size: int | None = None
     ):
         """
         Initialize an empty streaming recall tracker.
@@ -1665,7 +1667,10 @@ class Recall:
 
         self.average = average
         self.pos_label = pos_label
-        self._confusion_matrix = ConfusionMatrix()
+        self.window_size = window_size
+        self._confusion_matrix = ConfusionMatrix(
+            window_size=window_size
+        )
 
     @property
     def classes(self) -> np.ndarray:
