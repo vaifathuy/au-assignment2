@@ -687,11 +687,11 @@ class Accuracy:
     Examples
     --------
     >>> metric = Accuracy()
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([1, 0, 1]),
     ...     np.array([1, 0, 0])
     ... )
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([0, 1]),
     ...     np.array([0, 1])
     ... )
@@ -735,7 +735,7 @@ class Accuracy:
         self._total_count = 0
         return self
 
-    def update_stats(self, y_true: np.ndarray, y_pred: np.ndarray) -> Self:
+    def update(self, y_true: np.ndarray, y_pred: np.ndarray) -> Self:
         """
         Incrementally update accuracy statistics from a prediction chunk.
 
@@ -822,7 +822,7 @@ class MSE:
     Examples
     --------
     >>> metric = MSE()
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([1, 2, 3]),
     ...     np.array([1, 4, 2])
     ... )
@@ -847,11 +847,7 @@ class MSE:
         """
         return self._count
 
-    def update_stats(
-        self,
-        y_true: np.ndarray,
-        y_pred: np.ndarray
-    ) -> "MSE":
+    def update(self, y_true: np.ndarray, y_pred: np.ndarray) -> "MSE":
         """
         Incrementally update the accumulated squared error.
 
@@ -905,10 +901,7 @@ class MSE:
                 "Input arrays must contain numeric values."
             ) from exc
 
-        self._squared_error_sum += float(
-            np.sum(squared_errors)
-        )
-
+        self._squared_error_sum += float(np.sum(squared_errors))
         self._count += y_true.size
 
         return self
@@ -970,7 +963,7 @@ class ConfusionMatrix:
     Examples
     --------
     >>> metric = ConfusionMatrix()
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([0, 0, 1, 1]),
     ...     np.array([0, 1, 1, 1])
     ... )
@@ -978,7 +971,7 @@ class ConfusionMatrix:
     array([[1, 1],
            [0, 2]])
 
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([2, 1, 2]),
     ...     np.array([2, 2, 1])
     ... )
@@ -1007,11 +1000,7 @@ class ConfusionMatrix:
         """
         return self._count
 
-    def update_stats(
-        self,
-        y_true: np.ndarray,
-        y_pred: np.ndarray
-    ) -> Self:
+    def update(self, y_true: np.ndarray, y_pred: np.ndarray) -> Self:
         """
         Incrementally update the confusion matrix from a prediction chunk.
 
@@ -1050,7 +1039,24 @@ class ConfusionMatrix:
         """
         y_true, y_pred = _validate_and_flatten(y_true, y_pred)
 
-        self._append_new_classes(np.concatenate([y_true, y_pred]))
+        # append new classes
+        old_class_count = len(self._classes)
+
+        for label in np.concatenate([y_true, y_pred]):
+            if label not in self._class_to_index:
+                self._class_to_index[label] = len(self._classes)
+                self._classes.append(label)
+
+        new_class_count = len(self._classes)
+
+        if new_class_count != old_class_count:
+            expanded_matrix = np.zeros(
+                (new_class_count, new_class_count),
+                dtype=int
+            )
+
+            expanded_matrix[:old_class_count, :old_class_count] = self._matrix
+            self._matrix = expanded_matrix
 
         true_indexes = np.array(
             [self._class_to_index[label] for label in y_true],
@@ -1067,32 +1073,6 @@ class ConfusionMatrix:
         self._count += y_true.size
 
         return self
-
-    def _append_new_classes(
-        self,
-        labels: np.ndarray
-    ) -> None:
-
-        old_class_count = len(self._classes)
-
-        for label in labels:
-            if label not in self._class_to_index:
-                self._class_to_index[label] = len(self._classes)
-                self._classes.append(label)
-
-        new_class_count = len(self._classes)
-
-        if new_class_count == old_class_count:
-            return
-
-        expanded_matrix = np.zeros(
-            (new_class_count, new_class_count),
-            dtype=int
-        )
-
-        expanded_matrix[:old_class_count, :old_class_count] = self._matrix
-
-        self._matrix = expanded_matrix
 
     def result(self) -> np.ndarray:
         """
@@ -1159,7 +1139,7 @@ class Precision:
     Binary precision:
 
     >>> metric = Precision()
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([1, 0, 1, 1]),
     ...     np.array([1, 1, 0, 1])
     ... )
@@ -1169,7 +1149,7 @@ class Precision:
     Multiclass macro precision:
 
     >>> metric = Precision(average="macro")
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([0, 1, 2, 0]),
     ...     np.array([0, 2, 2, 0])
     ... )
@@ -1242,11 +1222,7 @@ class Precision:
         """
         return self._confusion_matrix.count
 
-    def update_stats(
-        self,
-        y_true: np.ndarray,
-        y_pred: np.ndarray
-    ) -> Self:
+    def update(self, y_true: np.ndarray, y_pred: np.ndarray) -> Self:
         """
         Incrementally update precision statistics from a prediction chunk.
 
@@ -1280,11 +1256,7 @@ class Precision:
         Space Complexity:
             O(k²) for the retained confusion matrix.
         """
-        self._confusion_matrix.update_stats(
-            y_true,
-            y_pred
-        )
-
+        self._confusion_matrix.update(y_true, y_pred)
         return self
 
     def result(self) -> float:
@@ -1353,7 +1325,7 @@ class Recall:
     Binary recall:
 
     >>> metric = Recall()
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([1, 0, 1, 1]),
     ...     np.array([1, 1, 0, 1])
     ... )
@@ -1363,7 +1335,7 @@ class Recall:
     Multiclass macro recall:
 
     >>> metric = Recall(average="macro")
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([0, 1, 2, 0]),
     ...     np.array([0, 2, 2, 0])
     ... )
@@ -1372,8 +1344,7 @@ class Recall:
     """
 
     def __init__(
-        self,
-        average: str = "binary",
+        self, average: str = "binary",
         pos_label=1
     ):
         """
@@ -1436,11 +1407,7 @@ class Recall:
         """
         return self._confusion_matrix.count
 
-    def update_stats(
-        self,
-        y_true: np.ndarray,
-        y_pred: np.ndarray
-    ) -> Self:
+    def update(self, y_true: np.ndarray, y_pred: np.ndarray) -> Self:
         """
         Incrementally update recall statistics from a prediction chunk.
 
@@ -1474,7 +1441,7 @@ class Recall:
         Space Complexity:
             O(k²) for the retained confusion matrix.
         """
-        self._confusion_matrix.update_stats(y_true, y_pred)
+        self._confusion_matrix.update(y_true, y_pred)
 
         return self
 
@@ -1600,11 +1567,7 @@ class F1:
         """
         return self._confusion_matrix.count
 
-    def update_stats(
-        self,
-        y_true: np.ndarray,
-        y_pred: np.ndarray
-    ) -> Self:
+    def update(self, y_true: np.ndarray, y_pred: np.ndarray) -> Self:
         """
         Incrementally update F1 statistics from a prediction chunk.
 
@@ -1620,7 +1583,7 @@ class F1:
         F1
             The updated instance.
         """
-        self._confusion_matrix.update_stats(
+        self._confusion_matrix.update(
             y_true,
             y_pred
         )
@@ -1713,11 +1676,11 @@ class ROCAUC:
     Examples
     --------
     >>> metric = ROCAUC()
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([0, 1]),
     ...     np.array([0.10, 0.90])
     ... )
-    >>> metric.update_stats(
+    >>> metric.update(
     ...     np.array([1, 0]),
     ...     np.array([0.60, 0.40])
     ... )
@@ -1805,11 +1768,7 @@ class ROCAUC:
             self._y_score_chunks
         ).copy()
 
-    def update_stats(
-        self,
-        y_true: np.ndarray,
-        y_scores: np.ndarray
-    ) -> Self:
+    def update(self, y_true: np.ndarray, y_scores: np.ndarray) -> Self:
         """
         Incrementally retain labels and prediction scores from a new chunk.
 

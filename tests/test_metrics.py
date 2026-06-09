@@ -763,7 +763,7 @@ class TestAUC:
 class TestAccuracyStream:
     def test_update_stats_single_chunk(self):
         metric = Accuracy()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0, 1, 1]),
             np.array([1, 0, 0, 1])
         )
@@ -776,14 +776,14 @@ class TestAccuracyStream:
 
     def test_update_stats_accumulates_multiple_chunks(self):
         metric = Accuracy()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0, 1]),
             np.array([1, 0, 0])
         )
         npt.assert_equal(metric.correct_count, 2)
         npt.assert_equal(metric.count, 3)
 
-        metric.update_stats(
+        metric.update(
             np.array([0, 1]),
             np.array([0, 1])
         )
@@ -797,7 +797,7 @@ class TestAccuracyStream:
 
     def test_supports_2d_inputs(self):
         metric = Accuracy()
-        metric.update_stats(
+        metric.update(
             np.array([
                 [1],
                 [0],
@@ -819,7 +819,7 @@ class TestAccuracyStream:
     def test_reset_clears_accumulated_statistics(self):
         metric = Accuracy()
 
-        metric.update_stats(
+        metric.update(
             np.array([1, 0, 1]),
             np.array([1, 0, 0])
         )
@@ -833,7 +833,7 @@ class TestAccuracyStream:
 class TestMSEStream:
     def test_update_stats_single_chunk(self):
         metric = MSE()
-        metric.update_stats(
+        metric.update(
             np.array([1, 2, 3]),
             np.array([1, 4, 2])
         )
@@ -843,11 +843,11 @@ class TestMSEStream:
 
     def test_update_stats_accumulates_multiple_chunks(self):
         metric = MSE()
-        metric.update_stats(
+        metric.update(
             np.array([1, 2, 3]),
             np.array([1, 4, 2])
         )
-        metric.update_stats(
+        metric.update(
             np.array([4, 5]),
             np.array([2, 5])
         )
@@ -857,7 +857,7 @@ class TestMSEStream:
 
     def test_supports_multidimensional_arrays(self):
         metric = MSE()
-        metric.update_stats(
+        metric.update(
             np.array([[1, 2], [3, 4]]),
             np.array([[1, 4], [2, 4]])
         )
@@ -867,7 +867,7 @@ class TestMSEStream:
 
     def test_supports_float_values(self):
         metric = MSE()
-        metric.update_stats(
+        metric.update(
             np.array([1.5, 2.5, 3.5]),
             np.array([1.0, 2.0, 4.0])
         )
@@ -877,7 +877,7 @@ class TestMSEStream:
 
     def test_reset_clears_accumulated_statistics(self):
         metric = MSE()
-        metric.update_stats(
+        metric.update(
             np.array([1, 2, 3]),
             np.array([1, 4, 2])
         )
@@ -898,7 +898,7 @@ class TestMSEStream:
         npt.assert_raises_regex(
             ValueError,
             r"Input arrays must not be empty\.",
-            metric.update_stats,
+            metric.update,
             np.array([]),
             np.array([])
         )
@@ -908,7 +908,7 @@ class TestMSEStream:
         npt.assert_raises_regex(
             ValueError,
             r"Shape mismatch",
-            metric.update_stats,
+            metric.update,
             np.array([
                 1,
                 2,
@@ -925,7 +925,7 @@ class TestMSEStream:
 
         npt.assert_raises_regex(
             ValueError, r"Shape mismatch",
-            metric.update_stats,
+            metric.update,
             np.array([
                 [1, 2],
                 [3, 4]
@@ -944,7 +944,7 @@ class TestMSEStream:
         npt.assert_raises_regex(
             TypeError,
             r"Input arrays must contain numeric values\.",
-            metric.update_stats,
+            metric.update,
             np.array([
                 "one",
                 "two"
@@ -960,7 +960,7 @@ class TestConfusionMatrixStream:
 
     def test_update_stats_single_chunk(self):
         metric = ConfusionMatrix()
-        result = metric.update_stats(
+        result = metric.update(
             np.array([0, 0, 1, 1]),
             np.array([0, 1, 1, 1])
         )
@@ -978,11 +978,11 @@ class TestConfusionMatrixStream:
 
     def test_update_stats_accumulates_multiple_chunks(self):
         metric = ConfusionMatrix()
-        metric.update_stats(
+        metric.update(
             np.array([0, 0, 1, 1]),
             np.array([0, 1, 1, 1])
         )
-        metric.update_stats(
+        metric.update(
             np.array([1, 0]),
             np.array([0, 0])
         )
@@ -999,7 +999,7 @@ class TestConfusionMatrixStream:
     def test_existing_class_positions_do_not_shift(self):
         metric = ConfusionMatrix()
 
-        metric.update_stats(
+        metric.update(
             np.array(["cat", "dog", "dog"]),
             np.array(["cat", "cat", "dog"])
         )
@@ -1013,7 +1013,7 @@ class TestConfusionMatrixStream:
             ])
         )
 
-        metric.update_stats(
+        metric.update(
             np.array(["bird"]),
             np.array(["cat"])
         )
@@ -1037,7 +1037,7 @@ class TestConfusionMatrixStream:
 
     def test_repeated_pairs_are_counted_multiple_times(self):
         metric = ConfusionMatrix()
-        metric.update_stats(
+        metric.update(
             np.array([1, 1, 1, 1]),
             np.array([0, 0, 0, 0])
         )
@@ -1052,7 +1052,7 @@ class TestConfusionMatrixStream:
 
     def test_supports_multidimensional_inputs(self):
         metric = ConfusionMatrix()
-        metric.update_stats(
+        metric.update(
             np.array([
                 [0],
                 [1],
@@ -1078,7 +1078,7 @@ class TestConfusionMatrixStream:
 
     def test_classes_property_returns_copy(self):
         metric = ConfusionMatrix()
-        metric.update_stats(
+        metric.update(
             np.array([0, 1]),
             np.array([0, 1])
         )
@@ -1088,7 +1088,7 @@ class TestConfusionMatrixStream:
 
     def test_reset_clears_accumulated_statistics(self):
         metric = ConfusionMatrix()
-        metric.update_stats(
+        metric.update(
             np.array([0, 1]),
             np.array([0, 1])
         )
@@ -1110,7 +1110,7 @@ class TestConfusionMatrixStream:
 
         npt.assert_raises(
             ValueError,
-            metric.update_stats,
+            metric.update,
             np.array([]),
             np.array([])
         )
@@ -1120,7 +1120,7 @@ class TestConfusionMatrixStream:
 
         npt.assert_raises(
             ValueError,
-            metric.update_stats,
+            metric.update,
             np.array([0, 1, 2]),
             np.array([0, 1])
         )
@@ -1130,7 +1130,7 @@ class TestPrecisionStream:
 
     def test_binary_precision_single_chunk(self):
         metric = Precision()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0, 1, 1]),
             np.array([1, 1, 0, 1])
         )
@@ -1138,12 +1138,12 @@ class TestPrecisionStream:
 
     def test_precision_accumulates_multiple_chunks(self):
         metric = Precision()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0]),
             np.array([1, 1])
         )
 
-        metric.update_stats(
+        metric.update(
             np.array([1, 1]),
             np.array([0, 1])
         )
@@ -1153,7 +1153,7 @@ class TestPrecisionStream:
 
     def test_returns_zero_if_positive_class_is_never_predicted(self):
         metric = Precision()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0, 1]),
             np.array([0, 0, 0])
         )
@@ -1162,7 +1162,7 @@ class TestPrecisionStream:
     def test_macro_precision(self):
         metric = Precision(average="macro")
 
-        metric.update_stats(
+        metric.update(
             np.array([0, 1, 2, 0, 1, 2]),
             np.array([0, 2, 1, 0, 0, 2])
         )
@@ -1177,7 +1177,7 @@ class TestPrecisionStream:
 
     def test_reset_clears_statistics(self):
         metric = Precision()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0]),
             np.array([1, 1])
         )
@@ -1195,7 +1195,7 @@ class TestRecallStream:
 
     def test_binary_recall_single_chunk(self):
         metric = Recall()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0, 1, 1]),
             np.array([1, 1, 0, 1])
         )
@@ -1203,11 +1203,11 @@ class TestRecallStream:
 
     def test_recall_accumulates_multiple_chunks(self):
         metric = Recall()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0]),
             np.array([1, 1])
         )
-        metric.update_stats(
+        metric.update(
             np.array([1, 1]),
             np.array([0, 1])
         )
@@ -1220,14 +1220,14 @@ class TestRecallStream:
         y_pred = np.array([1, 1, 0, 1, 0])
         expected = recall(y_true, y_pred)
 
-        metric.update_stats(y_true[:2], y_pred[:2])
-        metric.update_stats(y_true[2:], y_pred[2:])
+        metric.update(y_true[:2], y_pred[:2])
+        metric.update(y_true[2:], y_pred[2:])
 
         npt.assert_allclose(metric.result(), expected)
 
     def test_returns_zero_if_positive_class_never_appears(self):
         metric = Recall()
-        metric.update_stats(
+        metric.update(
             np.array([0, 0, 0]),
             np.array([0, 1, 0])
         )
@@ -1240,12 +1240,12 @@ class TestRecallStream:
         y_pred = np.array([0, 2, 1, 0, 0, 2])
         expected = recall(y_true, y_pred, average="macro")
 
-        metric.update_stats(y_true, y_pred)
+        metric.update(y_true, y_pred)
         npt.assert_allclose(metric.result(), expected)
 
     def test_reset_clears_statistics(self):
         metric = Recall()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0]),
             np.array([1, 1])
         )
@@ -1263,7 +1263,7 @@ class TestF1Stream:
 
     def test_binary_f1_single_chunk(self):
         metric = F1()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0, 1, 1]),
             np.array([1, 1, 0, 1])
         )
@@ -1271,12 +1271,12 @@ class TestF1Stream:
 
     def test_f1_accumulates_multiple_chunks(self):
         metric = F1()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0]),
             np.array([1, 1])
         )
 
-        metric.update_stats(
+        metric.update(
             np.array([1, 1]),
             np.array([0, 1])
         )
@@ -1290,14 +1290,14 @@ class TestF1Stream:
         y_pred = np.array([1, 1, 0, 1, 0])
         expected = f1(y_true, y_pred)
 
-        metric.update_stats(y_true[:2], y_pred[:2])
-        metric.update_stats(y_true[2:], y_pred[2:])
+        metric.update(y_true[:2], y_pred[:2])
+        metric.update(y_true[2:], y_pred[2:])
 
         npt.assert_allclose(metric.result(), expected)
 
     def test_reset_clears_statistics(self):
         metric = F1()
-        metric.update_stats(
+        metric.update(
             np.array([1, 0]),
             np.array([1, 1])
         )
@@ -1315,11 +1315,11 @@ class TestROCAUCStream:
 
     def test_auc_accumulates_multiple_chunks(self):
         metric = ROCAUC()
-        metric.update_stats(
+        metric.update(
             np.array([0, 0]),
             np.array([0.10, 0.30])
         )
-        metric.update_stats(
+        metric.update(
             np.array([1, 1]),
             np.array([0.70, 0.90])
         )
@@ -1329,7 +1329,7 @@ class TestROCAUCStream:
     def test_result_requires_both_classes(self):
         metric = ROCAUC()
 
-        metric.update_stats(
+        metric.update(
             np.array([1, 1, 1]),
             np.array([0.60, 0.80, 0.90])
         )
@@ -1342,7 +1342,7 @@ class TestROCAUCStream:
 
     def test_reset_clears_statistics(self):
         metric = ROCAUC()
-        metric.update_stats(
+        metric.update(
             np.array([0, 1]),
             np.array([0.10, 0.90])
         )

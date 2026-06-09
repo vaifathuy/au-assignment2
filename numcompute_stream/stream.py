@@ -225,7 +225,7 @@ class StreamTrainer:
         chunk_accuracy = accuracy(y, y_pred)
 
         # Update chunked-based metric statisticcs
-        self._accuracy_metric.update_stats(y, y_pred)
+        self._accuracy_metric.update(y, y_pred)
 
         self._score_chunk_count += 1
 
