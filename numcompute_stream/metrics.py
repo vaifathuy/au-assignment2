@@ -1393,7 +1393,8 @@ class ConfusionMatrix:
 
 class Precision:
     """
-    Incrementally calculate precision from prediction chunks.
+    Incrementally calculate precision from prediction chunks,
+    with the support of rolling-window configuration.
 
     The class reuses ``ConfusionMatrix`` to retain class-to-class counts as
     prediction chunks arrive.
@@ -1424,7 +1425,8 @@ class Precision:
     def __init__(
         self,
         average: str = "binary",
-        pos_label=1
+        pos_label=1,
+        window_size: int | None = None
     ):
         """
         Initialize an empty streaming precision tracker.
@@ -1444,6 +1446,10 @@ class Precision:
         pos_label : optional
             Class label treated as positive when ``average='binary'``.
             Default is 1.
+         window_size : int or None, optional
+            Maximum number of recent prediction pairs used to calculate
+            precision. If None, every processed prediction is accumulated.
+            Default is None.
 
         Raises
         ------
@@ -1470,7 +1476,11 @@ class Precision:
 
         self.average = average
         self.pos_label = pos_label
-        self._confusion_matrix = ConfusionMatrix()
+        self.window_size = window_size
+
+        self._confusion_matrix = ConfusionMatrix(
+            window_size=window_size
+        )
 
     @property
     def classes(self) -> np.ndarray:
