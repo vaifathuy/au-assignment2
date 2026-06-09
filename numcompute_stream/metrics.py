@@ -904,12 +904,8 @@ class Accuracy:
 
 class MSE:
     """
-    Incrementally calculate mean squared error from prediction chunks.
-
-    It measures the average squared difference between
-    predicted and true values:
-
-        MSE = sum((y_true - y_pred) ** 2) / number of observations
+    Incrementally calculate mean squared error from prediction chunks
+    with the support of rolling-window configuration.
 
     Examples
     --------
@@ -922,7 +918,33 @@ class MSE:
     1.6666666666666667
     """
 
-    def __init__(self):
+    def __init__(self, window_size: int | None = None):
+        """
+        Initialize an empty streaming MSE tracker.
+
+        Parameters
+        ----------
+        window_size : int or None, optional
+            Maximum number of recent squared errors used to calculate MSE.
+            If None, MSE accumulates across every processed value.
+            Default is None.
+
+        Raises
+        ------
+        TypeError
+            If ``window_size`` is not an integer or None.
+        ValueError
+            If ``window_size`` is not greater than zero.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1) before prediction chunks are processed.
+        """
+        _validate_window_size(window_size)
+        self.window_size = window_size
         self.reset()
 
     @property
@@ -930,14 +952,20 @@ class MSE:
         """
         Return the accumulated sum of squared errors.
         """
-        return self._squared_error_sum
+        if self.window_size is None:
+            return self._squared_error_sum
+
+        return float(sum(self._recent_squared_errors))
 
     @property
     def count(self) -> int:
         """
         Return the total number of processed values.
         """
-        return self._count
+        if self.window_size is None:
+            return self._count
+
+        return len(self._recent_squared_errors)
 
     def update(self, y_true: np.ndarray, y_pred: np.ndarray) -> "MSE":
         """
@@ -993,8 +1021,12 @@ class MSE:
                 "Input arrays must contain numeric values."
             ) from exc
 
-        self._squared_error_sum += float(np.sum(squared_errors))
-        self._count += y_true.size
+        if self.window_size is None:
+            self._squared_error_sum += float(np.sum(squared_errors))
+            self._count += y_true.size
+        else:
+            for squared_error in squared_errors.ravel():
+                self._recent_squared_errors.append(float(squared_error))
 
         return self
 
@@ -1019,12 +1051,22 @@ class MSE:
         Space Complexity:
             O(1).
         """
-        if self._count == 0:
-            raise ValueError(
-                "No predictions have been accumulated yet."
-            )
 
-        return self._squared_error_sum / self._count
+        if self.window_size is None:
+            if self._count == 0:
+                raise ValueError(
+                    "No predictions have been accumulated yet."
+                )
+
+            return self._squared_error_sum / self._count
+        else:
+            if len(self._recent_squared_errors) == 0:
+                raise ValueError("No predictions have been accumulated yet.")
+
+            return float(
+                sum(self._recent_squared_errors)
+                / len(self._recent_squared_errors)
+            )
 
     def reset(self) -> "MSE":
         """
@@ -1044,7 +1086,7 @@ class MSE:
         """
         self._squared_error_sum = 0.0
         self._count = 0
-
+        self._recent_squared_errors = deque(maxlen=self.window_size)
         return self
 
 

@@ -1058,10 +1058,105 @@ class TestMSEStream:
             ])
         )
 
+    def test_rolling_window_retains_latest_squared_errors(self):
+        metric = MSE(window_size=3)
+
+        metric.update(
+            np.array([
+                1,
+                2,
+                3
+            ]),
+            np.array([
+                1,
+                4,
+                2
+            ])
+        )
+        npt.assert_equal(metric.count, 3)
+        npt.assert_allclose(metric.squared_error_sum, 5.0)
+        npt.assert_allclose(metric.result(), 1.6666666667)
+
+        metric.update(
+            np.array([
+                10
+            ]),
+            np.array([
+                7
+            ])
+        )
+
+        npt.assert_equal(metric.count, 3)
+        npt.assert_allclose(metric.squared_error_sum, 14.0)
+        npt.assert_allclose(metric.result(), 4.6666666667)
+
+    def test_rolling_window_discards_values_within_large_chunk(self):
+        metric = MSE(window_size=2)
+
+        metric.update(
+            np.array([
+                1,
+                2,
+                3,
+                4
+            ]),
+            np.array([
+                1,
+                4,
+                2,
+                7
+            ])
+        )
+        npt.assert_equal(metric.count, 2)
+        npt.assert_allclose(metric.squared_error_sum, 10.0)
+        npt.assert_allclose(metric.result(), 5.0)
+
+    def test_rolling_window_reset_clears_squared_errors(self):
+        metric = MSE(window_size=3)
+
+        metric.update(
+            np.array([
+                1,
+                2,
+                3
+            ]),
+            np.array([
+                1,
+                4,
+                2
+            ])
+        )
+
+        npt.assert_equal(metric.reset(), metric)
+        npt.assert_equal(metric.count, 0)
+        npt.assert_allclose(metric.squared_error_sum, 0.0)
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
+        )
+
+    def test_rejects_zero_window_size(self):
+        npt.assert_raises_regex(
+            ValueError,
+            r"window_size must be greater than zero\.",
+            MSE,
+            window_size=0
+        )
+
+    def test_rejects_non_integer_window_size(self):
+        npt.assert_raises_regex(
+            TypeError,
+            r"window_size must be an integer or None\.",
+            MSE,
+            window_size=2.5
+        )
+
 
 class TestConfusionMatrixStream:
 
-    def test_update_stats_single_chunk(self):
+    def test_update_single_chunk(self):
         metric = ConfusionMatrix()
         result = metric.update(
             np.array([0, 0, 1, 1]),
