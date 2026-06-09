@@ -1995,6 +1995,184 @@ class TestF1Stream:
             metric.result
         )
 
+    def test_rolling_window_retains_latest_predictions(self):
+        metric = F1(window_size=4)
+        metric.update(
+            np.array([
+                1,
+                1,
+                1
+            ]),
+            np.array([
+                1,
+                1,
+                0
+            ])
+        )
+        npt.assert_equal(metric.count, 3)
+        npt.assert_allclose(metric.result(), 0.8)
+
+        metric.update(
+            np.array([
+                0,
+                0
+            ]),
+            np.array([
+                1,
+                0
+            ])
+        )
+        npt.assert_equal(
+            metric.count, 4
+        )
+
+        npt.assert_allclose(
+            metric.result(),
+            0.5
+        )
+
+    def test_rolling_window_discards_predictions_within_large_chunk(self):
+        metric = F1(window_size=3)
+
+        metric.update(
+            np.array([
+                1,
+                1,
+                0,
+                1,
+                0
+            ]),
+            np.array([
+                1,
+                0,
+                1,
+                1,
+                0
+            ])
+        )
+        npt.assert_equal(
+            metric.count, 3
+        )
+
+        npt.assert_allclose(
+            metric.result(),
+            0.6666666667
+        )
+
+    def test_rolling_window_removes_inactive_classes_for_macro_f1(self):
+        metric = F1(
+            average="macro",
+            window_size=2
+        )
+
+        metric.update(
+            np.array([
+                0,
+                2
+            ]),
+            np.array([
+                0,
+                2
+            ])
+        )
+
+        npt.assert_array_equal(
+            metric.classes,
+            np.array([
+                0,
+                2
+            ])
+        )
+
+        npt.assert_allclose(
+            metric.result(),
+            1.0
+        )
+
+        metric.update(
+            np.array([
+                1,
+                1
+            ]),
+            np.array([
+                1,
+                1
+            ])
+        )
+        npt.assert_equal(
+            metric.count,
+            2
+        )
+
+        npt.assert_array_equal(
+            metric.classes,
+            np.array([
+                1
+            ])
+        )
+
+        npt.assert_allclose(
+            metric.result(),
+            1.0
+        )
+
+    def test_rolling_window_reset_clears_predictions(self):
+        metric = F1(
+            window_size=3
+        )
+
+        metric.update(
+            np.array([
+                1,
+                0,
+                1
+            ]),
+            np.array([
+                1,
+                1,
+                0
+            ])
+        )
+
+        result = metric.reset()
+
+        npt.assert_equal(
+            result,
+            metric
+        )
+
+        npt.assert_equal(
+            metric.count,
+            0
+        )
+
+        npt.assert_array_equal(
+            metric.classes,
+            np.array([])
+        )
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
+        )
+
+    def test_rejects_zero_window_size(self):
+        npt.assert_raises_regex(
+            ValueError,
+            r"window_size must be greater than zero\.",
+            F1,
+            window_size=0
+        )
+
+    def test_rejects_non_integer_window_size(self):
+        npt.assert_raises_regex(
+            TypeError,
+            r"window_size must be an integer or None\.",
+            F1,
+            window_size=2.5
+        )
+
 
 class TestROCAUCStream:
 
