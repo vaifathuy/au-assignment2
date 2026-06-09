@@ -1322,6 +1322,164 @@ class TestConfusionMatrixStream:
             np.array([0, 1, 2]),
             np.array([0, 1])
         )
+    
+    def test_rolling_window_retains_latest_prediction_pairs(self):
+        metric = ConfusionMatrix(window_size=3)
+
+        metric.update(
+            np.array([
+                0,
+                0,
+                1
+            ]),
+            np.array([
+                0,
+                1,
+                1
+            ])
+        )
+        npt.assert_equal(metric.count, 3)
+        npt.assert_array_equal(
+            metric.classes,
+            np.array([
+                0,
+                1
+            ])
+        )
+
+        npt.assert_array_equal(
+            metric.result(),
+            np.array([
+                [1, 1],
+                [0, 1]
+            ])
+        )
+
+        metric.update(
+            np.array([1]),
+            np.array([0])
+        )
+        npt.assert_equal(metric.count, 3)
+
+        npt.assert_array_equal(
+            metric.classes,
+            np.array([0, 1])
+        )
+
+        npt.assert_array_equal(
+            metric.result(),
+            np.array([
+                [0, 1],
+                [1, 1]
+            ])
+        )
+
+    def test_rolling_window_discards_pairs_within_large_chunk(self):
+        metric = ConfusionMatrix(window_size=2)
+        metric.update(
+            np.array([
+                0,
+                0,
+                1,
+                1
+            ]),
+            np.array([
+                0,
+                1,
+                0,
+                1
+            ])
+        )
+
+        npt.assert_equal(metric.count, 2)
+        npt.assert_array_equal(
+            metric.classes,
+            np.array([
+                1,
+                0
+            ])
+        )
+
+        npt.assert_array_equal(
+            metric.result(),
+            np.array([
+                [1, 1],
+                [0, 0]
+            ])
+        )
+
+    def test_rolling_window_removes_inactive_classes(self):
+        metric = ConfusionMatrix(window_size=2)
+        metric.update(
+            np.array([0, 2]),
+            np.array([0, 2])
+        )
+
+        npt.assert_array_equal(
+            metric.classes,
+            np.array([0, 2])
+        )
+
+        metric.update(
+            np.array([1, 1]),
+            np.array([1, 1])
+        )
+
+        # The earlier class labels 0 and 2 no longer appear in the
+        # rolling window, so they must be removed from the matrix.
+        npt.assert_equal(metric.count, 2)
+
+        npt.assert_array_equal(
+            metric.classes,
+            np.array([1])
+        )
+
+        npt.assert_array_equal(
+            metric.result(),
+            np.array([
+                [2]
+            ])
+        )
+
+    def test_rolling_window_reset_clears_retained_pairs(self):
+        metric = ConfusionMatrix(window_size=3)
+        metric.update(
+            np.array([
+                0,
+                1,
+                1
+            ]),
+            np.array([
+                0,
+                0,
+                1
+            ])
+        )
+        npt.assert_equal(metric.reset(), metric)
+        npt.assert_equal(metric.count, 0)
+        npt.assert_array_equal(metric.classes, np.array([]))
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
+        )
+
+    def test_rejects_zero_window_size(self):
+        npt.assert_raises_regex(
+            ValueError,
+            r"window_size must be greater than zero\.",
+            ConfusionMatrix,
+            window_size=0
+        )
+
+    def test_rejects_non_integer_window_size(self):
+        npt.assert_raises_regex(
+            TypeError,
+            r"window_size must be an integer or None\.",
+            ConfusionMatrix,
+            window_size=2.5
+        )
 
 
 class TestPrecisionStream:

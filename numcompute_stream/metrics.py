@@ -1092,7 +1092,8 @@ class MSE:
 
 class ConfusionMatrix:
     """
-    Incrementally accumulate a confusion matrix from prediction chunks.
+    Incrementally accumulate a confusion matrix from prediction chunks
+    with the support of rolling-window configuration.
 
     Examples
     --------
@@ -1115,9 +1116,53 @@ class ConfusionMatrix:
     array([[1, 1, 0],
            [0, 2, 1],
            [0, 1, 1]])
+    Rolling-window confusion matrix:
+
+    >>> metric = ConfusionMatrix(window_size=3)
+    >>> metric.update(
+    ...     np.array([0, 0, 1]),
+    ...     np.array([0, 1, 1])
+    ... )
+    >>> metric.update(
+    ...     np.array([1]),
+    ...     np.array([0])
+    ... )
+    >>> metric.result()
+    array([[0, 1],
+           [1, 1]])
     """
 
-    def __init__(self):
+    def __init__(self, window_size: int | None = None):
+        """
+        Initialize an empty streaming confusion matrix.
+
+        Parameters
+        ----------
+        window_size : int or None, optional
+            Maximum number of recent prediction pairs retained.
+
+            If None, all predictions are accumulated.
+            If an integer is supplied, only the latest ``window_size``
+            predictions are represented.
+
+            Default is None.
+
+        Raises
+        ------
+        TypeError
+            If ``window_size`` is not an integer or None.
+        ValueError
+            If ``window_size`` is not greater than zero.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1) before predictions are processed.
+        """
+        _validate_window_size(window_size)
+        self.window_size = window_size
         self.reset()
 
     @property
@@ -1132,7 +1177,10 @@ class ConfusionMatrix:
         """
         Return the total number of processed predictions.
         """
-        return self._count
+        if self.window_size is None:
+            return self._count
+
+        return len(self._recent_pairs)
 
     def update(self, y_true: np.ndarray, y_pred: np.ndarray) -> Self:
         """
@@ -1163,48 +1211,39 @@ class ConfusionMatrix:
         Complexity
         ----------
         Time Complexity:
-            O(m) in the usual case, where m is the number of predictions
-            in the incoming chunk.
+            Cumulative mode:
+                O(m + k²) when new classes appear.
 
-            If new classes appear, matrix expansion requires O(k²), where
-            k is the updated total number of known classes.
+            Rolling-window mode:
+                O(w + k²), where w is the retained window size and k is the
+                number of classes currently represented.
+
         Space Complexity:
-            O(k²) for the retained confusion matrix.
+            Cumulative mode:
+                O(k²) for the retained matrix.
+
+            Rolling-window mode:
+                O(w + k²) for retained prediction pairs and the matrix.
         """
         y_true, y_pred = _validate_and_flatten(y_true, y_pred)
 
-        # append new classes
-        old_class_count = len(self._classes)
+        if self.window_size is None:
+            self._update_cumulative_matrix(y_true, y_pred)
+            self._count += y_true.size
+            return self
 
-        for label in np.concatenate([y_true, y_pred]):
-            if label not in self._class_to_index:
-                self._class_to_index[label] = len(self._classes)
-                self._classes.append(label)
-
-        new_class_count = len(self._classes)
-
-        if new_class_count != old_class_count:
-            expanded_matrix = np.zeros(
-                (new_class_count, new_class_count),
-                dtype=int
+        for true_label, predicted_label in zip(
+            y_true,
+            y_pred
+        ):
+            self._recent_pairs.append(
+                (
+                    true_label,
+                    predicted_label
+                )
             )
 
-            expanded_matrix[:old_class_count, :old_class_count] = self._matrix
-            self._matrix = expanded_matrix
-
-        true_indexes = np.array(
-            [self._class_to_index[label] for label in y_true],
-            dtype=int
-        )
-        pred_indexes = np.array(
-            [self._class_to_index[label] for label in y_pred],
-            dtype=int
-        )
-
-        # Increment every true-label / predicted-label pair.
-        np.add.at(self._matrix, (true_indexes, pred_indexes), 1)
-
-        self._count += y_true.size
+        self._rebuild_rolling_matrix()
 
         return self
 
@@ -1230,10 +1269,17 @@ class ConfusionMatrix:
         Space Complexity:
             O(k²) for the returned array.
         """
-        if self._count == 0:
-            raise ValueError(
-                "No predictions have been accumulated yet."
-            )
+        if self.window_size is None:
+            if self._count == 0:
+                raise ValueError(
+                    "No predictions have been accumulated yet."
+                )
+
+        else:
+            if len(self._recent_pairs) == 0:
+                raise ValueError(
+                    "No predictions have been accumulated yet."
+                )
 
         return self._matrix.copy()
 
@@ -1257,8 +1303,92 @@ class ConfusionMatrix:
         self._class_to_index = {}
         self._matrix = np.zeros((0, 0), dtype=int)
         self._count = 0
-
+        self._recent_pairs = deque(maxlen=self.window_size)
         return self
+
+    def _update_cumulative_matrix(
+        self,
+        y_true: np.ndarray,
+        y_pred: np.ndarray
+    ) -> None:
+        """
+        Add incoming prediction counts to the cumulative matrix.
+        """
+        old_class_count = len(self._classes)
+
+        for label in np.concatenate([y_true, y_pred]):
+            if label not in self._class_to_index:
+                self._class_to_index[label] = len(self._classes)
+                self._classes.append(label)
+
+        new_class_count = len(self._classes)
+
+        if new_class_count != old_class_count:
+            expanded_matrix = np.zeros(
+                (
+                    new_class_count,
+                    new_class_count
+                ),
+                dtype=int
+            )
+
+            expanded_matrix[
+                :old_class_count,
+                :old_class_count
+            ] = self._matrix
+
+            self._matrix = expanded_matrix
+
+        true_indexes = np.array(
+            [
+                self._class_to_index[label]
+                for label in y_true
+            ],
+            dtype=int
+        )
+
+        predicted_indexes = np.array(
+            [
+                self._class_to_index[label]
+                for label in y_pred
+            ],
+            dtype=int
+        )
+
+        np.add.at(
+            self._matrix,
+            (true_indexes, predicted_indexes),
+            1
+        )
+
+    def _rebuild_rolling_matrix(self) -> None:
+        """
+        Rebuild the matrix using only retained rolling-window pairs.
+        """
+        self._classes = []
+        self._class_to_index = {}
+
+        for true_label, predicted_label in self._recent_pairs:
+            for label in (true_label, predicted_label):
+                if label not in self._class_to_index:
+                    self._class_to_index[label] = len(self._classes)
+                    self._classes.append(label)
+
+        class_count = len(self._classes)
+
+        self._matrix = np.zeros(
+            (
+                class_count,
+                class_count
+            ),
+            dtype=int
+        )
+
+        for true_label, predicted_label in self._recent_pairs:
+            true_index = self._class_to_index[true_label]
+            predicted_index = self._class_to_index[predicted_label]
+
+            self._matrix[true_index, predicted_index] += 1
 
 
 class Precision:
