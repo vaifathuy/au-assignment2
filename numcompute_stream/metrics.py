@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Self
+from collections import deque
 
 
 def _validate_and_flatten(
@@ -677,9 +678,46 @@ def _aggregate_class_scores(
         return float(correct_predictions / total_predictions)
 
 
+def _validate_window_size(
+    window_size: int | None
+) -> None:
+    """
+    Validate an optional rolling-window size.
+
+    Parameters
+    ----------
+    window_size : int or None
+        Maximum number of recent observations retained for a rolling-window
+        metric.
+
+    Raises
+    ------
+    TypeError
+        If ``window_size`` is not an integer or None.
+    ValueError
+        If ``window_size`` is not greater than zero.
+    """
+    if (
+        window_size is not None
+        and type(window_size) is not int
+    ):
+        raise TypeError(
+            "window_size must be an integer or None."
+        )
+
+    if (
+        window_size is not None
+        and window_size <= 0
+    ):
+        raise ValueError(
+            "window_size must be greater than zero."
+        )
+
+
 class Accuracy:
     """
-    Incrementally calculate classification accuracy from prediction chunks.
+    Incrementally calculate classification accuracy from prediction chunks
+    with the support of rolling-window configuration.
 
     It measures the proportion of predictions that match their
     corresponding true labels.
@@ -698,7 +736,34 @@ class Accuracy:
     >>> metric.result()
     0.8
     """
-    def __init__(self):
+    def __init__(self, window_size: int | None = None):
+        """
+        Initialize an empty streaming accuracy tracker.
+
+        Parameters
+        ----------
+        window_size : int or None, optional
+            Maximum number of recent predictions used to calculate accuracy.
+            If None, accuracy is accumulated across every processed
+            prediction. Default is None.
+
+        Raises
+        ------
+        TypeError
+            If ``window_size`` is not an integer or None.
+        ValueError
+            If ``window_size`` is not greater than zero.
+
+        Complexity
+        ----------
+        Time Complexity:
+            O(1).
+        Space Complexity:
+            O(1) before prediction chunks are processed.
+        """
+
+        _validate_window_size(window_size)
+        self.window_size = window_size
         self.reset()
 
     @property
@@ -706,14 +771,20 @@ class Accuracy:
         """
         Return the accumulated number of correct predictions.
         """
-        return self._correct_count
+        if self.window_size is None:
+            return self._correct_count
+
+        return int(sum(self._recent_correctness))
 
     @property
     def count(self) -> int:
         """
         Return the accumulated number of processed predictions.
         """
-        return self._total_count
+        if self.window_size is None:
+            return self._total_count
+
+        return len(self._recent_correctness)
 
     def reset(self) -> Self:
         """
@@ -733,6 +804,9 @@ class Accuracy:
         """
         self._correct_count = 0
         self._total_count = 0
+        self._recent_correctness = deque(
+            maxlen=self.window_size
+        )
         return self
 
     def update(self, y_true: np.ndarray, y_pred: np.ndarray) -> Self:
@@ -776,14 +850,20 @@ class Accuracy:
             y_pred
         )
 
-        correcte_preds = np.sum(y_true == y_pred)
-        self._correct_count += int(correcte_preds)
-        self._total_count += y_true.size
+        correctness = y_true == y_pred
+
+        if self.window_size is None:
+            self._correct_count += int(np.sum(correctness))
+            self._total_count += y_true.size
+        else:
+            for correct in correctness:
+                self._recent_correctness.append(bool(correct))
+
         return self
 
     def result(self) -> float:
         """
-        Return the accumulated accuracy score.
+        Return the cumulative or rolling-window accuracy score.
 
         Returns
         -------
@@ -793,21 +873,33 @@ class Accuracy:
         Raises
         ------
         ValueError
-            If no prediction chunks have been processed.
+            If no predictions have been accumulated.
 
         Complexity
         ----------
         Time Complexity:
-            O(1)
+            O(1) in cumulative mode.
+            O(w) in rolling-window mode, where w is the number of retained
+            predictions.
         Space Complexity:
-            O(1)
+            O(1).
         """
-        if self._total_count == 0:
-            raise ValueError(
-                "No predictions have been accumulated yet."
-            )
+        if self.window_size is None:
+            if self._total_count == 0:
+                raise ValueError("No predictions have been accumulated yet.")
 
-        return self._correct_count / self._total_count
+            return (
+                self._correct_count
+                / self._total_count
+            )
+        else:
+            if len(self._recent_correctness) == 0:
+                raise ValueError("No predictions have been accumulated yet.")
+
+            return float(
+                sum(self._recent_correctness)
+                / len(self._recent_correctness)
+            )
 
 
 class MSE:

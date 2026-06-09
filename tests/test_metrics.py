@@ -829,6 +829,109 @@ class TestAccuracyStream:
         npt.assert_equal(metric.correct_count, 0)
         npt.assert_equal(metric.count, 0)
 
+    # Rolling-window
+    def test_rolling_window_retains_latest_predictions(self):
+        metric = Accuracy(window_size=4)
+
+        metric.update(
+            np.array([
+                1,
+                0,
+                1
+            ]),
+            np.array([
+                1,
+                1,
+                1
+            ])
+        )
+
+        npt.assert_equal(metric.count, 3)
+        npt.assert_equal(metric.correct_count, 2)
+        npt.assert_allclose(metric.result(), 2 / 3)
+
+        metric.update(
+            np.array([
+                0,
+                1
+            ]),
+            np.array([
+                0,
+                0
+            ])
+        )
+
+        npt.assert_equal(metric.count, 4)
+        npt.assert_equal(metric.correct_count, 2)
+        npt.assert_allclose(metric.result(), 0.5)
+
+    def test_rolling_window_discards_values_within_large_chunk(self):
+        metric = Accuracy(window_size=3)
+
+        metric.update(
+            np.array([
+                1,
+                0,
+                1,
+                0,
+                1
+            ]),
+            np.array([
+                0,
+                0,
+                1,
+                1,
+                1
+            ])
+        )
+
+        npt.assert_equal(metric.count, 3)
+        npt.assert_equal(metric.correct_count, 2)
+        npt.assert_equal(metric.result(), 2 / 3)
+
+    def test_rolling_window_reset_clears_retained_predictions(self):
+        metric = Accuracy(window_size=3)
+
+        metric.update(
+            np.array([
+                1,
+                0,
+                1
+            ]),
+            np.array([
+                1,
+                1,
+                1
+            ])
+        )
+
+        result = metric.reset()
+        npt.assert_equal(result, metric)
+        npt.assert_equal(metric.count, 0)
+        npt.assert_equal(metric.correct_count, 0)
+
+        npt.assert_raises_regex(
+            ValueError,
+            r"No predictions have been accumulated yet\.",
+            metric.result
+        )
+
+    def test_rejects_zero_window_size(self):
+        npt.assert_raises_regex(
+            ValueError,
+            r"window_size must be greater than zero\.",
+            Accuracy,
+            window_size=0
+        )
+
+    def test_rejects_non_integer_window_size(self):
+        npt.assert_raises_regex(
+            TypeError,
+            r"window_size must be an integer or None\.",
+            Accuracy,
+            window_size=3.5
+        )
+
 
 class TestMSEStream:
     def test_update_stats_single_chunk(self):
@@ -1195,7 +1298,7 @@ class TestRecallStream:
 
     def test_binary_recall_single_chunk(self):
         metric = Recall()
-        metric.update(
+        metric.update_stats(
             np.array([1, 0, 1, 1]),
             np.array([1, 1, 0, 1])
         )
@@ -1203,11 +1306,11 @@ class TestRecallStream:
 
     def test_recall_accumulates_multiple_chunks(self):
         metric = Recall()
-        metric.update(
+        metric.update_stats(
             np.array([1, 0]),
             np.array([1, 1])
         )
-        metric.update(
+        metric.update_stats(
             np.array([1, 1]),
             np.array([0, 1])
         )
@@ -1220,14 +1323,14 @@ class TestRecallStream:
         y_pred = np.array([1, 1, 0, 1, 0])
         expected = recall(y_true, y_pred)
 
-        metric.update(y_true[:2], y_pred[:2])
-        metric.update(y_true[2:], y_pred[2:])
+        metric.update_stats(y_true[:2], y_pred[:2])
+        metric.update_stats(y_true[2:], y_pred[2:])
 
         npt.assert_allclose(metric.result(), expected)
 
     def test_returns_zero_if_positive_class_never_appears(self):
         metric = Recall()
-        metric.update(
+        metric.update_stats(
             np.array([0, 0, 0]),
             np.array([0, 1, 0])
         )
@@ -1240,12 +1343,12 @@ class TestRecallStream:
         y_pred = np.array([0, 2, 1, 0, 0, 2])
         expected = recall(y_true, y_pred, average="macro")
 
-        metric.update(y_true, y_pred)
+        metric.update_stats(y_true, y_pred)
         npt.assert_allclose(metric.result(), expected)
 
     def test_reset_clears_statistics(self):
         metric = Recall()
-        metric.update(
+        metric.update_stats(
             np.array([1, 0]),
             np.array([1, 1])
         )
@@ -1263,7 +1366,7 @@ class TestF1Stream:
 
     def test_binary_f1_single_chunk(self):
         metric = F1()
-        metric.update(
+        metric.update_stats(
             np.array([1, 0, 1, 1]),
             np.array([1, 1, 0, 1])
         )
@@ -1271,12 +1374,12 @@ class TestF1Stream:
 
     def test_f1_accumulates_multiple_chunks(self):
         metric = F1()
-        metric.update(
+        metric.update_stats(
             np.array([1, 0]),
             np.array([1, 1])
         )
 
-        metric.update(
+        metric.update_stats(
             np.array([1, 1]),
             np.array([0, 1])
         )
@@ -1290,14 +1393,14 @@ class TestF1Stream:
         y_pred = np.array([1, 1, 0, 1, 0])
         expected = f1(y_true, y_pred)
 
-        metric.update(y_true[:2], y_pred[:2])
-        metric.update(y_true[2:], y_pred[2:])
+        metric.update_stats(y_true[:2], y_pred[:2])
+        metric.update_stats(y_true[2:], y_pred[2:])
 
         npt.assert_allclose(metric.result(), expected)
 
     def test_reset_clears_statistics(self):
         metric = F1()
-        metric.update(
+        metric.update_stats(
             np.array([1, 0]),
             np.array([1, 1])
         )
@@ -1315,11 +1418,11 @@ class TestROCAUCStream:
 
     def test_auc_accumulates_multiple_chunks(self):
         metric = ROCAUC()
-        metric.update(
+        metric.update_stats(
             np.array([0, 0]),
             np.array([0.10, 0.30])
         )
-        metric.update(
+        metric.update_stats(
             np.array([1, 1]),
             np.array([0.70, 0.90])
         )
@@ -1329,7 +1432,7 @@ class TestROCAUCStream:
     def test_result_requires_both_classes(self):
         metric = ROCAUC()
 
-        metric.update(
+        metric.update_stats(
             np.array([1, 1, 1]),
             np.array([0.60, 0.80, 0.90])
         )
@@ -1342,7 +1445,7 @@ class TestROCAUCStream:
 
     def test_reset_clears_statistics(self):
         metric = ROCAUC()
-        metric.update(
+        metric.update_stats(
             np.array([0, 1]),
             np.array([0.10, 0.90])
         )
