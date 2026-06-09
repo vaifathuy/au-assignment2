@@ -38,10 +38,7 @@ class TestPlotMetricOverTime:
             show=False
         )
 
-        assert_equal(
-            result,
-            None
-        )
+        assert_equal(result, None)
 
     def test_rejects_empty_values(self):
         assert_raises_regex(
@@ -76,10 +73,7 @@ class TestCompareModels:
             show=False
         )
 
-        assert_equal(
-            result,
-            None
-        )
+        assert_equal(result, None)
 
     def test_rejects_different_metric_shapes(self):
         assert_raises_regex(
@@ -179,10 +173,7 @@ class TestPlotPredictionsVsGroundTruth:
             show=False
         )
 
-        assert_equal(
-            save_path.exists(),
-            True
-        )
+        assert_equal(save_path.exists(), True)
 
     def test_rejects_different_lengths(self):
         assert_raises_regex(
