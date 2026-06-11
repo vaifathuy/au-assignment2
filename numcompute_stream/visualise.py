@@ -1,17 +1,10 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-# Reusable function
 def _finalize_plot(figure, save_path: str | None, show: bool) -> None:
-    """
-    Save and display a completed figure when requested.
-    """
     if save_path is not None:
-        figure.savefig(
-            save_path
-        )
+        figure.savefig(save_path)
 
     if show:
         plt.show()
@@ -25,7 +18,7 @@ def plot_metric_over_time(
     show: bool = True
 ):
     """
-    Plot a metric (e.g.,accuracy) across chunks.
+    Plot a metric across chunks.
 
     Parameters
     ----------
