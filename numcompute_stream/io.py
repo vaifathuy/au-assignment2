@@ -10,8 +10,12 @@ import os
 import csv
 
 
-def load_csv(filename: str, dtype: tuple | None = None,
-             delimiter: str = ',', skip_header: bool = True) -> np.ndarray:
+def load_csv(
+    filename: str,
+    dtype: tuple | None = None,
+    delimiter: str = ',',
+    skip_header: bool = True
+) -> np.ndarray:
     """
     Load data from a text file with a specified delimiter.
 

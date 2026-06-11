@@ -117,43 +117,23 @@ def compare_models(
     metric1 = np.asarray(metric1)
     metric2 = np.asarray(metric2)
 
-    if (
-        metric1.size == 0
-        or metric2.size == 0
-    ):
+    if (metric1.size == 0 or metric2.size == 0):
         raise ValueError(
             "Both metric arrays must contain at least one value."
         )
 
     if metric1.shape != metric2.shape:
-        raise ValueError(
-            "Both metric arrays must have the same shape."
-        )
+        raise ValueError("Both metric arrays must have the same shape.")
 
     if len(labels) != 2:
-        raise ValueError(
-            "labels must contain exactly two model names."
-        )
+        raise ValueError("labels must contain exactly two model names.")
 
     chunk_numbers = np.arange(1, metric1.size + 1)
 
     # Plotting
     figure, axes = plt.subplots()
-
-    axes.plot(
-        chunk_numbers,
-        metric1,
-        marker="o",
-        label=labels[0]
-    )
-
-    axes.plot(
-        chunk_numbers,
-        metric2,
-        marker="o",
-        label=labels[1]
-    )
-
+    axes.plot(chunk_numbers, metric1, marker="o", label=labels[0])
+    axes.plot(chunk_numbers, metric2, marker="o", label=labels[1])
     axes.set_title(title)
     axes.set_xlabel("Chunk")
     axes.set_ylabel(ylabel)

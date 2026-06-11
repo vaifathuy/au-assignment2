@@ -1,9 +1,9 @@
 [project]
-name = "numcompute"
-version = "1.0.0"
+name = "numcompute_stream"
+version = "1.0.1"
 dependencies = ["numpy"]
 requires-python = ">=3.13"
-description = "COMP5004 Assignment 2.1 submission for the NumpyNewbies group"
+description = "Assignment 2.2 streaming, decision tree–based machine learning framework"
 readme = "README.md"
 
 [project.urls]
@@ -26,7 +26,7 @@ test = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["numcompute*"]
+include = ["numcompute_stream*"]
 
 [tool.coverage.report]
 exclude_also = [

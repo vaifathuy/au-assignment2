@@ -32,10 +32,7 @@ class _Node:
         """
         Return whether the node has no child nodes.
         """
-        return (
-            self.left is None
-            and self.right is None
-        )
+        return (self.left is None and self.right is None)
 
 
 class DecisionTreeClassifier:
@@ -117,16 +114,10 @@ class DecisionTreeClassifier:
         Space Complexity:
             O(1) before fitting.
         """
-        if (
-            max_depth is not None
-            and type(max_depth) is not int
-        ):
+        if (max_depth is not None and type(max_depth) is not int):
             raise TypeError("max_depth must be an integer or None.")
 
-        if (
-            max_depth is not None
-            and max_depth < 0
-        ):
+        if (max_depth is not None and max_depth < 0):
             raise ValueError("max_depth must be non-negative.")
 
         if type(min_samples_split) is not int:
@@ -238,7 +229,6 @@ class DecisionTreeClassifier:
             self._n_features = X_chunk.shape[1]
 
             self._validate_max_features_for_input(self._n_features)
-
             self._append_new_classes(y_chunk)
 
             self._root = self._create_leaf(
@@ -247,10 +237,7 @@ class DecisionTreeClassifier:
                 depth=0
             )
 
-            self._grow_leaf(
-                self._root
-            )
-
+            self._grow_leaf(self._root)
             return self
 
         if X_chunk.shape[1] != self._n_features:
@@ -259,9 +246,7 @@ class DecisionTreeClassifier:
                 "the fitted tree."
             )
 
-        self._append_new_classes(
-            y_chunk
-        )
+        self._append_new_classes(y_chunk)
 
         leaf_updates = {}
 
@@ -269,9 +254,7 @@ class DecisionTreeClassifier:
             X_chunk,
             y_chunk
         ):
-            leaf = self._find_leaf(
-                row
-            )
+            leaf = self._find_leaf(row)
 
             if leaf not in leaf_updates:
                 leaf_updates[leaf] = {
@@ -279,33 +262,14 @@ class DecisionTreeClassifier:
                     "labels": []
                 }
 
-            leaf_updates[leaf]["rows"].append(
-                row
-            )
-
-            leaf_updates[leaf]["labels"].append(
-                label
-            )
+            leaf_updates[leaf]["rows"].append(row)
+            leaf_updates[leaf]["labels"].append(label)
 
         for leaf, updates in leaf_updates.items():
-            new_X = np.asarray(
-                updates["rows"],
-                dtype=float
-            )
-
-            new_y = np.asarray(
-                updates["labels"]
-            )
-
-            self._append_samples(
-                leaf=leaf,
-                X=new_X,
-                y=new_y
-            )
-
-            self._grow_leaf(
-                leaf
-            )
+            new_X = np.asarray(updates["rows"], dtype=float)
+            new_y = np.asarray(updates["labels"])
+            self._append_samples(leaf=leaf, X=new_X, y=new_y)
+            self._grow_leaf(leaf)
 
         return self
 
@@ -409,14 +373,8 @@ class DecisionTreeClassifier:
             X
         ])
 
-        leaf.y_samples = np.concatenate([
-            leaf.y_samples,
-            y
-        ])
-
-        leaf.prediction = self._majority_class(
-            leaf.y_samples
-        )
+        leaf.y_samples = np.concatenate([leaf.y_samples, y])
+        leaf.prediction = self._majority_class(leaf.y_samples)
 
     def _grow_leaf(self, leaf: _Node) -> None:
         """
@@ -570,35 +528,24 @@ class DecisionTreeClassifier:
         A value of 0.0 represents a pure node.
         """
         _, counts = np.unique(y, return_counts=True)
-
         probabilities = (counts / counts.sum())
-
-        return float(
-            1 - np.sum(probabilities ** 2)
-        )
+        return float(1 - np.sum(probabilities ** 2))
 
     def _majority_class(self, y: np.ndarray):
         """
         Return the most frequently occurring class label.
         """
         classes, counts = np.unique(y, return_counts=True)
-
         return classes[np.argmax(counts)]
 
-    def _find_leaf(
-        self,
-        row: np.ndarray
-    ) -> _Node:
+    def _find_leaf(self, row: np.ndarray) -> _Node:
         """
         Route one observation through the tree and return its leaf.
         """
         current = self._root
 
         while not current.is_leaf:
-            if (
-                row[current.feature_index]
-                <= current.threshold
-            ):
+            if (row[current.feature_index] <= current.threshold):
                 current = current.left
             else:
                 current = current.right
@@ -606,25 +553,19 @@ class DecisionTreeClassifier:
         return current
 
     def _append_new_classes(
-        self,
-        y: np.ndarray
+        self, y: np.ndarray
     ) -> None:
         """
         Append newly observed labels in first-seen order.
         """
         for label in y:
             if label not in self._classes:
-                self._classes.append(
-                    label
-                )
+                self._classes.append(label)
 
     def _validate_max_features_for_input(
         self,
         n_features: int
     ) -> None:
-        """
-        Reject ``max_features`` values larger than the input width.
-        """
         if (
             self.max_features is not None
             and self.max_features > n_features
@@ -658,13 +599,8 @@ class DecisionTreeClassifier:
         return X.astype("float64", copy=False)
 
     def _validate_X_y(
-        self,
-        X: np.ndarray,
-        y: np.ndarray
-    ) -> tuple[
-        np.ndarray,
-        np.ndarray
-    ]:
+        self, X: np.ndarray, y: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Validate feature and target arrays.
         """
@@ -676,9 +612,7 @@ class DecisionTreeClassifier:
         y = np.asarray(y).ravel()
 
         if y.size == 0:
-            raise ValueError(
-                "y must contain at least one value."
-            )
+            raise ValueError("y must contain at least one value.")
 
         if y.size != X.shape[0]:
             raise ValueError(
@@ -686,9 +620,7 @@ class DecisionTreeClassifier:
             )
 
         if (y == None).any():  # noqa: E711
-            raise ValueError(
-                "y must not contain None values."
-            )
+            raise ValueError("y must not contain None values.")
 
         if np.issubdtype(y.dtype, np.number):
             if np.iscomplexobj(y):
@@ -697,13 +629,9 @@ class DecisionTreeClassifier:
                 )
 
             if np.isnan(y).any():
-                raise ValueError(
-                    "y must not contain NaN values."
-                )
+                raise ValueError("y must not contain NaN values.")
 
             if np.isinf(y).any():
-                raise ValueError(
-                    "y must not contain infinite values."
-                )
+                raise ValueError("y must not contain infinite values.")
 
         return X, y

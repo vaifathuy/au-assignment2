@@ -845,10 +845,7 @@ class Accuracy:
             O(m) for the temporary flattened arrays and comparison result.
             Retained metric state requires O(1) space.
         """
-        y_true, y_pred = _validate_and_flatten(
-            y_true,
-            y_pred
-        )
+        y_true, y_pred = _validate_and_flatten(y_true, y_pred)
 
         correctness = y_true == y_pred
 
