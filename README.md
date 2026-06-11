@@ -1,37 +1,29 @@
-# `numcompute` by NumpyNewbies 
+# `numcompute_stream`
 
-<!-- Pytest Coverage Comment:Begin -->
-<a href=https://github.com/vaifathuy/au-assignment2/blob/main/README.md><img alt=Coverage src=https://img.shields.io/badge/Coverage-96%25-brightgreen.svg /></a><details><summary>Coverage Report </summary><table><tr><th>File</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr><tbody><tr><td colspan=5><b>numcompute</b></td></tr><tr><td>&nbsp; &nbsp;<a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/__init__.py>__init__.py</a></td><td>11</td><td>0</td><td>100%</td><td>&nbsp;</td></tr><tr><td>&nbsp; &nbsp;<a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/io.py>io.py</a></td><td>24</td><td>1</td><td>96%</td><td><a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/io.py#L66>66</a></td></tr><tr><td>&nbsp; &nbsp;<a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/metrics.py>metrics.py</a></td><td>148</td><td>0</td><td>100%</td><td>&nbsp;</td></tr><tr><td>&nbsp; &nbsp;<a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/optim.py>optim.py</a></td><td>49</td><td>0</td><td>100%</td><td>&nbsp;</td></tr><tr><td>&nbsp; &nbsp;<a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/pipeline.py>pipeline.py</a></td><td>67</td><td>1</td><td>99%</td><td><a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/pipeline.py#L286>286</a></td></tr><tr><td>&nbsp; &nbsp;<a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py>preprocessing.py</a></td><td>225</td><td>23</td><td>90%</td><td><a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L78>78</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L82>82</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L191>191</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L196>196</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L204>204</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L219-L220>219&ndash;220</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L284>284</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L290>290</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L297>297</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L331-L332>331&ndash;332</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L461>461</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L473>473</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L623>623</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L636>636</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L732>732</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L841>841</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L844>844</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L866>866</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L933>933</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L941>941</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/preprocessing.py#L946>946</a></td></tr><tr><td>&nbsp; &nbsp;<a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/rank.py>rank.py</a></td><td>63</td><td>2</td><td>97%</td><td><a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/rank.py#L159>159</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/rank.py#L169>169</a></td></tr><tr><td>&nbsp; &nbsp;<a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/sort_search.py>sort_search.py</a></td><td>49</td><td>0</td><td>100%</td><td>&nbsp;</td></tr><tr><td>&nbsp; &nbsp;<a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/stats.py>stats.py</a></td><td>56</td><td>2</td><td>96%</td><td><a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/stats.py#L175>175</a>, <a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/stats.py#L194>194</a></td></tr><tr><td>&nbsp; &nbsp;<a href=https://github.com/vaifathuy/au-assignment2/blob/main/numcompute/utils.py>utils.py</a></td><td>12</td><td>0</td><td>100%</td><td>&nbsp;</td></tr><tr><td><b>TOTAL</b></td><td><b>704</b></td><td><b>29</b></td><td><b>96%</b></td><td>&nbsp;</td></tr></tbody></table></details>
-<!-- Pytest Coverage Comment:End -->
-
-Welcome to the project! `numcompute` is the 2026 S1 COMP05004 [Assigment 2.1](https://learn.adelaide.edu.au/courses/30440/assignments/86550) submission by the NumpyNewbies group. 
-
-The `numcompute` library is a scientific computing toolkit using only plain Python and the [NumPy](https://github.com/numpy/numpy) library.
-
-
+`numcompute_stream` is a scientific computing toolkit developed with plain python and [NumPy](https://github.com/numpy/numpy) library.
 
 ---
 
 ## Table of Contents
 
-1. [Installation](#installation)
-2. [API Overview](#api-overview)
-3. [Examples](#examples)
-4. [Performance Benchmarking](#performance-benchmarks)
-5. [Future Enhancements](#future-enhancements)
-6. [Team Members](#team-members)
+- [`numcompute_stream`](#numcompute_stream)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+    - [Prerequisites](#prerequisites)
+    - [Setup](#setup)
+  - [API Overview](#api-overview)
+  - [Examples](#examples)
+  - [Performance Benchmarking](#performance-benchmarking)
 
 ---
 
 ## Installation
 
-In addition to core Python and NumPy, `numcompute` uses these other libraries for supporting functions:
+In addition to core Python and NumPy, `numcompute_stream` uses these other libraries for supporting functions:
 
-- [flake8](https://github.com/PyCQA/flake8): code linting (PEP8) 
-- [pytest](https://github.com/pytest-dev/pytest), [pytest-cov](https://github.com/pytest-dev/pytest-cov): automated tests and coverage reporting 
+- [flake8](https://github.com/PyCQA/flake8): code linting (PEP8)
+- [pytest](https://github.com/pytest-dev/pytest), [pytest-cov](https://github.com/pytest-dev/pytest-cov): automated tests and coverage reporting
 - [microbench](https://github.com/alubbock/microbench), [pandas](https://github.com/pandas-dev/pandas), [matplotlib](https://github.com/matplotlib/matplotlib): executing benchmarks and dispaying results
-
-
 
 ### Prerequisites
 
@@ -41,14 +33,7 @@ In addition to core Python and NumPy, `numcompute` uses these other libraries fo
 
 ### Setup
 
-1. **Clone (or unzip) the repository**
-
-   ```bash
-   git clone https://github.com/davetrumbull/comp_5004_ass2-1_numpy_newbies.git
-   cd comp_5004_ass2-1_numpy_newbies
-   ```
-
-2. **Create and activate a virtual environment**
+1. **Create and activate a virtual environment**
 
    venv:
 
@@ -64,22 +49,23 @@ In addition to core Python and NumPy, `numcompute` uses these other libraries fo
 
    conda:
 
-      ```bash
+   ```bash
    conda create --name <env_name> python=3.13
 
    conda activate <env_name>
 
    ```
 
-3. **Install dependencies (including dev/benchmarking tools)**
+2. **Install dependencies (including dev/benchmarking tools)**
 
-    > [!NOTE]  
-    > Even if you use conda, you'll need to run `pip` to install dependencies.
+   > [!NOTE]  
+   > Even if you use conda, you'll need to run `pip` to install dependencies.
+
    ```bash
    pip install -e ".[dev]"
    ```
 
-4. **Verify your setup**
+3. **Verify your setup**
 
    ```bash
    flake8 .
@@ -108,7 +94,8 @@ Please head to `demo/quickstart.ipynb` for examples on how to use the library.
 ## Performance Benchmarking
 
 The below table shows the benchmarking results of numcompute vs python loops
-```
+
+```plain
                     Function  Max size numcompute (ms)   Loop (ms)   Speedup
             metrics.accuracy    100000          0.1461      5.2926    36.22x
            metrics.precision    100000          0.1503      9.6444    64.15x
@@ -143,7 +130,7 @@ preprocessing.StandardScaler    100000         28.2057    166.7605     5.91x
 
 The benchmarks were run with this environment:
 
-```
+```plain
                 Property                                              Value
 0                     OS                                             darwin
 1    CPU cores (logical)                                                  8
@@ -155,37 +142,3 @@ The benchmarks were run with this environment:
 7       Duration counter                                       perf_counter
 8               Timezone                                                UTC
 ```
-
----
-
-## Optional Enhancements
-
-On top of the core requirements, the team delived optional features laid out in the assigment description such as:
-
-- `SimpleImputer` to handle `nan` was optional. We went further to also handle `None`.
-- `roc_curve` and `auc` for binary classification
-- The requirements called for ≥ 20 unit tests. In all, the team created 293 test cases with 98% coverage.
-
-
-
----
-
-## Future Enhancements
-
-The team has idemtified a number of enhancements that would improve the library including:
-- Extend `SimpleImputer` to handle `numpy.inf` and complex numbers. Also to work on string arrays.
-- Extend `Statistics class` to process streams of arrays
-- Implement the `line_search()` algorithm
-- Support for multidimensional arrays in `topk()`
-
----
-
-## Team Members
-
-The NumpyNewbies group is comprised of:
-
-
-- Aditya Dixit
-- David Trumbull
-- Nishan Chakma
-- Vaifat Huy
