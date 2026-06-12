@@ -294,48 +294,6 @@ class FeatureUnion():
             transformer.fit(X, y)
         return self
 
-    def partial_fit(self, X, y=None) -> "FeatureUnion":
-        """
-        Incrementally update every transformer using the same incoming chunk.
-
-        Parameters
-        ----------
-        X : np.ndarray
-            Incoming feature chunk.
-        y : np.ndarray, optional
-            Target values passed to each transformer.
-
-        Returns
-        -------
-        FeatureUnion
-            The updated feature-union instance.
-
-        Raises
-        ------
-        ValueError
-            If a transformer does not provide ``partial_fit()``.
-
-        Complexity
-        ----------
-        Time Complexity:
-            O(sum of each transformer's partial-fit cost).
-        Space Complexity:
-            O(1), excluding retained transformer state.
-        """
-        # Loop over each transformer.
-        # Verify it supports partial_fit().
-        # Call transformer.partial_fit(X, y).
-        # Return self.
-        for name, transformer in self.transformers:
-            if hasattr(transformer, "partial_fit"):
-                transformer.partial_fit(X, y)
-            else:
-                raise ValueError(
-                    f"Step '{name}' does not support partial_fit()."
-                )
-
-        return self
-
     def transform(self, X):
         """
         Apply all transformers in parallel and

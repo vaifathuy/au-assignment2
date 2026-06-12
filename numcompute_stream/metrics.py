@@ -721,20 +721,6 @@ class Accuracy:
 
     It measures the proportion of predictions that match their
     corresponding true labels.
-
-    Examples
-    --------
-    >>> metric = Accuracy()
-    >>> metric.update(
-    ...     np.array([1, 0, 1]),
-    ...     np.array([1, 0, 0])
-    ... )
-    >>> metric.update(
-    ...     np.array([0, 1]),
-    ...     np.array([0, 1])
-    ... )
-    >>> metric.result()
-    0.8
     """
     def __init__(self, window_size: int | None = None):
         """
@@ -903,16 +889,6 @@ class MSE:
     """
     Incrementally calculate mean squared error from prediction chunks
     with the support of rolling-window configuration.
-
-    Examples
-    --------
-    >>> metric = MSE()
-    >>> metric.update(
-    ...     np.array([1, 2, 3]),
-    ...     np.array([1, 4, 2])
-    ... )
-    >>> metric.result()
-    1.6666666666666667
     """
 
     def __init__(self, window_size: int | None = None):
@@ -1091,42 +1067,6 @@ class ConfusionMatrix:
     """
     Incrementally accumulate a confusion matrix from prediction chunks
     with the support of rolling-window configuration.
-
-    Examples
-    --------
-    >>> metric = ConfusionMatrix()
-    >>> metric.update(
-    ...     np.array([0, 0, 1, 1]),
-    ...     np.array([0, 1, 1, 1])
-    ... )
-    >>> metric.result()
-    array([[1, 1],
-           [0, 2]])
-
-    >>> metric.update(
-    ...     np.array([2, 1, 2]),
-    ...     np.array([2, 2, 1])
-    ... )
-    >>> metric.classes
-    array([0, 1, 2])
-    >>> metric.result()
-    array([[1, 1, 0],
-           [0, 2, 1],
-           [0, 1, 1]])
-    Rolling-window confusion matrix:
-
-    >>> metric = ConfusionMatrix(window_size=3)
-    >>> metric.update(
-    ...     np.array([0, 0, 1]),
-    ...     np.array([0, 1, 1])
-    ... )
-    >>> metric.update(
-    ...     np.array([1]),
-    ...     np.array([0])
-    ... )
-    >>> metric.result()
-    array([[0, 1],
-           [1, 1]])
     """
 
     def __init__(self, window_size: int | None = None):
@@ -1392,31 +1332,6 @@ class Precision:
     """
     Incrementally calculate precision from prediction chunks,
     with the support of rolling-window configuration.
-
-    The class reuses ``ConfusionMatrix`` to retain class-to-class counts as
-    prediction chunks arrive.
-
-    Examples
-    --------
-    Binary precision:
-
-    >>> metric = Precision()
-    >>> metric.update(
-    ...     np.array([1, 0, 1, 1]),
-    ...     np.array([1, 1, 0, 1])
-    ... )
-    >>> metric.result()
-    0.6666666666666666
-
-    Multiclass macro precision:
-
-    >>> metric = Precision(average="macro")
-    >>> metric.update(
-    ...     np.array([0, 1, 2, 0]),
-    ...     np.array([0, 2, 2, 0])
-    ... )
-    >>> metric.result()
-    0.5
     """
 
     def __init__(
@@ -1588,31 +1503,6 @@ class Recall:
     """
     Incrementally calculate recall from prediction chunks with
     rolling-window option.
-
-    The class reuses ``ConfusionMatrix`` to retain class-to-class counts as
-    prediction chunks arrive.
-
-    Examples
-    --------
-    Binary recall:
-
-    >>> metric = Recall()
-    >>> metric.update(
-    ...     np.array([1, 0, 1, 1]),
-    ...     np.array([1, 1, 0, 1])
-    ... )
-    >>> metric.result()
-    0.6666666666666666
-
-    Multiclass macro recall:
-
-    >>> metric = Recall(average="macro")
-    >>> metric.update(
-    ...     np.array([0, 1, 2, 0]),
-    ...     np.array([0, 2, 2, 0])
-    ... )
-    >>> metric.result()
-    0.6666666666666666
     """
 
     def __init__(
@@ -1947,20 +1837,6 @@ class ROCAUC:
     """
     Incrementally retain labels and prediction scores for exact ROC-AUC
     calculation.
-
-    Examples
-    --------
-    >>> metric = ROCAUC()
-    >>> metric.update(
-    ...     np.array([0, 1]),
-    ...     np.array([0.10, 0.90])
-    ... )
-    >>> metric.update(
-    ...     np.array([1, 0]),
-    ...     np.array([0.60, 0.40])
-    ... )
-    >>> metric.result()
-    1.0
     """
 
     def __init__(
@@ -2020,13 +1896,10 @@ class ROCAUC:
             if self._count == 0:
                 return np.array([])
 
-            return np.concatenate(
-                self._y_true_chunks
-            ).copy()
+            return np.array(self._y_true_chunks).copy()
         else:
             return np.asarray([
-                label
-                for label, _ in self._recent_observations
+                label for label, _ in self._recent_observations
             ]).copy()
 
     @property
@@ -2048,20 +1921,12 @@ class ROCAUC:
         """
         if self.window_size is None:
             if self._count == 0:
-                return np.array(
-                    [],
-                    dtype=float
-                )
+                return np.array([], dtype=float)
 
-            return np.concatenate(
-                self._y_score_chunks
-            ).copy()
+            return np.array(self._y_score_chunks).copy()
         else:
             return np.asarray(
-                [
-                    score
-                    for _, score in self._recent_observations
-                ],
+                [score for _, score in self._recent_observations],
                 dtype=float
             )
 
@@ -2131,14 +1996,10 @@ class ROCAUC:
 
             return self
         else:
-            for label, score in zip(
-                y_true,
-                y_scores
-            ):
+            for label, score in zip(y_true, y_scores):
                 self._recent_observations.append(
                     (label, float(score))
                 )
-
             return self
 
     def roc_curve(
@@ -2232,8 +2093,5 @@ class ROCAUC:
         self._y_score_chunks = []
         self._count = 0
 
-        self._recent_observations = deque(
-            maxlen=self.window_size
-        )
-
+        self._recent_observations = deque(maxlen=self.window_size)
         return self

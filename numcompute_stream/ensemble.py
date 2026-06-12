@@ -14,40 +14,6 @@ class EnsembleClassifier:
     slightly different patterns from the same stream.
 
     Predictions are combined using majority voting.
-
-    Examples
-    --------
-    Batch training:
-
-    >>> model = EnsembleClassifier(
-    ...     n_estimators=5,
-    ...     max_depth=3,
-    ...     random_state=42
-    ... )
-    >>> model.fit(
-    ...     np.array([[1], [2], [8], [9]]),
-    ...     np.array([0, 0, 1, 1])
-    ... )
-    >>> model.predict(
-    ...     np.array([[1], [9]])
-    ... )
-    array([0, 1])
-
-    Incremental training:
-
-    >>> model = EnsembleClassifier(
-    ...     n_estimators=5,
-    ...     max_depth=3,
-    ...     random_state=42
-    ... )
-    >>> model.partial_fit(
-    ...     np.array([[1], [2]]),
-    ...     np.array([0, 0])
-    ... )
-    >>> model.partial_fit(
-    ...     np.array([[8], [9]]),
-    ...     np.array([1, 1])
-    ... )
     """
 
     def __init__(

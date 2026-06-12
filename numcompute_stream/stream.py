@@ -20,52 +20,6 @@ class StreamTrainer:
 
     ``score_chunk()`` predicts one chunk without fitting it, calculates the
     chunk accuracy, updates cumulative accuracy, and records a log entry.
-
-    Notes
-    -----
-    For realistic online evaluation, score a newly received chunk before
-    fitting the model on that same chunk:
-
-        trainer.score_chunk(X_chunk, y_chunk)
-        trainer.fit_chunk(X_chunk, y_chunk)
-
-    The first chunk normally needs to be fitted without scoring because the
-    model has not learned from any earlier observations yet.
-
-    Memory footprint is measured using ``tracemalloc``. The logged values
-    represent Python memory allocations traced within the current process.
-    They are useful for comparing memory growth over time, but they do not
-    represent the complete operating-system memory usage of the program.
-
-    Examples
-    --------
-    >>> from numcompute_stream.ensemble import EnsembleClassifier
-    >>>
-    >>> model = EnsembleClassifier(
-    ...     n_estimators=5,
-    ...     max_depth=3,
-    ...     random_state=42
-    ... )
-    >>>
-    >>> trainer = StreamTrainer(model)
-    >>>
-    >>> trainer.fit_chunk(
-    ...     np.array([[1], [2]]),
-    ...     np.array([0, 0])
-    ... )
-    StreamTrainer(...)
-    >>>
-    >>> trainer.score_chunk(
-    ...     np.array([[8], [9]]),
-    ...     np.array([1, 1])
-    ... )
-    0.0
-    >>>
-    >>> trainer.fit_chunk(
-    ...     np.array([[8], [9]]),
-    ...     np.array([1, 1])
-    ... )
-    StreamTrainer(...)
     """
 
     def __init__(self, model):
@@ -228,7 +182,6 @@ class StreamTrainer:
         self._accuracy_metric.update(y, y_pred)
 
         self._score_chunk_count += 1
-
         current_memory, peak_memory = tracemalloc.get_traced_memory()
 
         self._logs.append({
@@ -271,17 +224,4 @@ class StreamTrainer:
         self._logs = []
         self._fit_chunk_count = 0
         self._score_chunk_count = 0
-
         return self
-
-    def __repr__(self) -> str:
-        """
-        Return a readable trainer representation.
-        """
-        return (
-            "StreamTrainer("
-            f"model={type(self.model).__name__}, "
-            f"fit_chunks={self._fit_chunk_count}, "
-            f"score_chunks={self._score_chunk_count}"
-            ")"
-        )

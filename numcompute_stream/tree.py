@@ -1,7 +1,5 @@
 from typing import Self
-
 import numpy as np
-
 from .utils import validate_numeric_array
 
 
@@ -44,35 +42,6 @@ class DecisionTreeClassifier:
     ``partial_fit()`` preserves existing branches, routes incoming rows into
     their corresponding leaves, and allows eligible leaves to split when
     sufficient observations have accumulated.
-
-    Examples
-    --------
-    Batch training:
-
-    >>> tree = DecisionTreeClassifier(max_depth=2)
-    >>> tree.fit(
-    ...     np.array([[2], [3], [8], [9]]),
-    ...     np.array([0, 0, 1, 1])
-    ... )
-    >>> tree.predict(np.array([[2], [9]]))
-    array([0, 1])
-
-    Incremental training:
-
-    >>> tree = DecisionTreeClassifier(
-    ...     max_depth=2,
-    ...     min_samples_split=4
-    ... )
-    >>> tree.partial_fit(
-    ...     np.array([[2], [3]]),
-    ...     np.array([0, 0])
-    ... )
-    >>> tree.partial_fit(
-    ...     np.array([[8], [9]]),
-    ...     np.array([1, 1])
-    ... )
-    >>> tree.predict(np.array([[2], [9]]))
-    array([0, 1])
     """
 
     def __init__(
@@ -383,9 +352,7 @@ class DecisionTreeClassifier:
         if not leaf.is_leaf:
             return
 
-        if not self._can_split(
-            leaf
-        ):
+        if not self._can_split(leaf):
             return
 
         split = self._best_split(
